@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Axiom Trading Tools — Nebula Projects</title>
+<link rel="preconnect" href="https://fonts.googleapis.com/">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&amp;family=DM+Mono:wght@400;500&amp;family=DM+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #ffffff;
+  --bg2:      #f5f5f2;
+  --border:   #d8d8d2;
+  --border2:  #b8b8b2;
+  --text:     #0e0e0d;
+  --text2:    #323230;
+  --text3:    #666662;
+  --green:    #125428;
+  --green-bg: #dff0e8;
+  --green-bd: #8ec4a6;
+  --accent:   #0e4eb0;
+  --accent-bg:#deeafb;
+  --amber:    #5e3c00;
+  --amber-bg: #fdf0c4;
+  --amber-bd: #c8a030;
+  --mono:     'DM Mono', monospace;
+  --sans:     'DM Sans', sans-serif;
+  --display:  'Syne', sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  background:var(--bg);color:var(--text);font-family:var(--sans);
+  font-size:15px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;
+}
+a{color:var(--accent);text-decoration:none;}
+a:hover{text-decoration:underline;}
+
+nav{background:rgba(255,255,255,.98);border-bottom:2px solid var(--border);height:54px;display:flex;align-items:center;padding:0 36px;position:sticky;top:0;z-index:100;backdrop-filter:blur(8px);justify-content:space-between;}
+.nav-left{display:flex;align-items:center;gap:32px;}
+.nav-logo{display:flex;align-items:center;gap:9px;text-decoration:none;}
+.logo-mark{width:24px;height:24px;background:var(--text);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.logo-mark::after{content:'';width:8px;height:8px;background:white;border-radius:50%;}
+.nav-logo-text{font-family:var(--display);font-size:15px;font-weight:700;color:var(--text);letter-spacing:-.3px;}
+.nav-links{display:flex;gap:0;}
+.nav-links a{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--text3);padding:5px 12px;border-radius:5px;transition:all .15s;text-decoration:none;}
+.nav-links a:hover{color:var(--text);background:var(--bg2);}
+.nav-home{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text3);padding:6px 12px;text-decoration:none;}
+.nav-home:hover{color:var(--text);}
+
+.hero{max-width:860px;margin:0 auto;padding:72px 36px 60px;text-align:center;}
+.hero h1{font-family:var(--display);font-size:clamp(44px,7vw,74px);font-weight:800;color:var(--text);letter-spacing:-2.5px;line-height:1.0;margin-bottom:10px;}
+.hero-sub-title{font-family:var(--display);font-size:clamp(22px,3.5vw,36px);font-weight:700;color:var(--text2);letter-spacing:-.8px;margin-bottom:24px;}
+.hero-desc{font-size:16px;color:var(--text2);max-width:560px;margin:0 auto 32px;line-height:1.8;font-weight:500;}
+.hero-desc strong{color:var(--text);font-weight:700;}
+.hero-chips{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:18px;}
+.chip{font-family:var(--mono);font-size:11px;font-weight:600;padding:5px 14px;border-radius:20px;border:2px solid var(--border2);color:var(--text2);background:var(--bg2);}
+.chip.g{background:var(--green-bg);border-color:var(--green-bd);color:var(--green);}
+.chip.b{background:var(--accent-bg);border-color:#94b8ee;color:var(--accent);}
+
+.section{max-width:860px;margin:0 auto;padding:0 36px;}
+.section-label{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--text3);margin-bottom:24px;display:flex;align-items:center;gap:12px;}
+.section-label::after{content:'';flex:1;height:1.5px;background:var(--border2);}
+
+.tool-card{background:var(--bg);border:2px solid var(--border2);border-radius:12px;overflow:hidden;margin-bottom:28px;box-shadow:0 2px 16px rgba(0,0,0,.07);scroll-margin-top:80px;}
+.tool-card-header{padding:28px 32px 24px;border-bottom:1.5px solid var(--border);}
+.tool-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+.tool-name{font-family:var(--display);font-size:23px;font-weight:800;color:var(--text);letter-spacing:-.5px;}
+.tool-version{font-family:var(--mono);font-size:10px;font-weight:600;padding:3px 9px;border-radius:4px;background:var(--bg2);border:1.5px solid var(--border2);color:var(--text3);}
+.tool-status{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--green);background:var(--green-bg);border:1.5px solid var(--green-bd);padding:3px 10px;border-radius:4px;}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+.tool-desc{font-size:14px;color:var(--text2);line-height:1.8;max-width:640px;font-weight:500;}
+.tool-desc strong{color:var(--text);font-weight:700;}
+
+.tool-steps{padding:26px 32px;border-bottom:1.5px solid var(--border);background:var(--bg2);}
+.tool-steps-title{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:18px;}
+.step-list{display:flex;flex-direction:column;gap:14px;list-style:none;}
+.step-list li{display:flex;gap:13px;align-items:flex-start;font-size:14px;color:var(--text2);line-height:1.6;font-weight:500;}
+.step-num{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--text);background:#fff;border:2px solid var(--border2);border-radius:5px;width:25px;height:25px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.step-list li strong{color:var(--text);font-weight:700;}
+
+.drag-wrap{display:flex;flex-direction:column;align-items:flex-start;gap:9px;margin-top:20px;}
+.drag-btn{display:inline-flex;align-items:center;gap:9px;background:var(--text);border:none;border-radius:7px;padding:11px 22px;font-family:var(--mono);font-size:12px;font-weight:700;color:#fff;cursor:grab;text-decoration:none;transition:all .15s;user-select:none;white-space:nowrap;box-shadow:0 2px 10px rgba(0,0,0,.22);}
+.drag-btn:hover{background:#1c1c1a;text-decoration:none;box-shadow:0 4px 16px rgba(0,0,0,.28);}
+.drag-btn:active{cursor:grabbing;}
+.drag-icon{width:14px;height:14px;opacity:.8;flex-shrink:0;}
+.drag-hint{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--text3);line-height:1.65;}
+
+.tool-body{display:grid;grid-template-columns:1fr 1fr;border-top:1.5px solid var(--border);}
+@media(max-width:640px){.tool-body{grid-template-columns:1fr;}}
+.tool-section{padding:22px 32px;}
+.tool-section:first-child{border-right:1.5px solid var(--border);}
+.tool-section-title{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:14px;}
+.feature-list{list-style:none;display:flex;flex-direction:column;gap:9px;}
+.feature-list li{display:flex;gap:10px;font-size:13px;color:var(--text2);line-height:1.6;font-weight:500;}
+.feature-list li::before{content:'→';color:var(--text3);flex-shrink:0;font-family:var(--mono);font-size:11px;margin-top:2px;}
+.feature-list li strong{color:var(--text);font-weight:700;}
+
+.info-bar{border-top:1.5px solid var(--border);padding:14px 32px;background:var(--bg2);font-size:13px;color:var(--text2);line-height:1.7;font-weight:500;}
+.info-bar strong{color:var(--text);font-weight:700;}
+code{font-family:var(--mono);font-size:.85em;font-weight:600;background:var(--amber-bg);border:1.5px solid var(--amber-bd);border-radius:3px;padding:1px 6px;color:var(--amber);}
+
+footer{border-top:2px solid var(--border);padding:28px 36px;margin-top:70px;}
+.footer-inner{max-width:860px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.footer-left{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--text3);}
+.footer-links{display:flex;gap:20px;}
+.footer-links a{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--text3);text-decoration:none;}
+.footer-links a:hover{color:var(--text2);}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <a href="index.html" class="nav-logo">
+      <div class="logo-mark"></div>
+      <span class="nav-logo-text">Nebula</span>
+    </a>
+    <div class="nav-links">
+      <a href="#axiom">Axiom Trade</a>
+      <a href="#pumpfun">Pumpfun</a>
+      <a href="#padre">Padre</a>
+    </div>
+  </div>
+</nav>
+
+<div class="hero">
+  <h1>Nebula</h1>
+  <div class="hero-sub-title">Memecoin Sniper for All Solana DEXs</div>
+  <p class="hero-desc">
+    Fast, lightweight trading tools for memecoin sniping across Solana DEXs.
+    Drag bookmarks directly to your browser bar — no downloads, no extensions.
+    One-click execution with pre-buy safety checks and position management.
+  </p>
+  <div class="hero-chips">
+    <span class="chip b">Axiom Trade</span>
+    <span class="chip b">Pumpfun</span>
+    <span class="chip b">Padre</span>
+    <span class="chip">Solana</span>
+  </div>
+</div>
+
+<div class="section" id="tools">
+  <div class="section-label">Current Tools</div>
+
+  <!-- TWITTER TRACKER CARD -->
+  <div class="tool-card" id="pumpfun">
+    <div class="tool-card-header">
+      <div class="tool-meta">
+        <span class="tool-name">Pumpfun Sniper</span>
+        <span class="tool-version">Beta v1.2.90</span>
+        <span class="tool-status"><span class="status-dot"></span>Active</span>
+      </div>
+      <p class="tool-desc">
+        One-click Pumpfun memecoin sniping with pre-buy safety checks.
+        Monitor contract addresses, execute fast buys with custom slippage,
+        and manage positions directly from <strong>Axiom Pro</strong> — no tab switching required.
+      </p>
+    </div>
+
+    <div class="tool-steps">
+      <div class="tool-steps-title">How to use</div>
+      <ol class="step-list">
+        <li><span class="step-num">1</span><span>Press <strong>Ctrl + Shift + B</strong> to show bookmarks bar.</span></li>
+        <li><span class="step-num">2</span><span><strong>Drag the button below</strong> to your bookmarks bar.</li>
+        <li><span class="step-num">3</span><span>Open your favorite DEX and click the bookmark.</span></li>
+        <li><span class="step-num">4</span><span>Configure settings, paste token CA, and execute.</span></li>
+      </ol>
+      <div class="drag-wrap">
+        <a class="drag-btn" id="pumpfunBookmarkBtn" draggable="true" href="javascript:void(0)" title="Pumpfun Sniper" onclick="return false;">
+          <svg class="drag-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8Z"/></svg>
+          ☘️ Sniper
+        </a>
+        <div class="drag-hint">Click the bookmark on Pumpfun for the toolbar to load.</div>
+      </div>
+    </div>
+
+    <div class="tool-body">
+      <div class="tool-section">
+        <div class="tool-section-title">Features</div>
+        <ul class="feature-list">
+          <li><strong>Private key import</strong> — import any Solana wallet directly</li>
+          <li><strong>Sbundle decoder</strong> — decode and extract wallet data from sbundles</li>
+          <li><strong>Auto wallet detection</strong> — scan browser storage for existing wallets</li>
+          <li><strong>Memecoin sniping</strong> — launch detection and fast execution</li>
+          <li><strong>Send all SOL</strong> — consolidate funds across multiple wallets</li>
+        </ul>
+      </div>
+      <div class="tool-section">
+        <div class="tool-section-title">Status</div>
+        <ul class="feature-list">
+          <li>Full sbundle decoding support</li>
+          <li>Private key extraction enabled</li>
+          <li>Direct Pumpfun integration</li>
+          <li>Real on-chain transactions</li>
+          <li>Beta - use with caution</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEBULA SNIPER CARD -->
+  <div class="tool-card" id="axiom">
+    <div class="tool-card-header">
+      <div class="tool-meta">
+        <span class="tool-name">Axiom Trade Sniper</span>
+        <span class="tool-version">Beta v1.1.9</span>
+        <span class="tool-status"><span class="status-dot"></span>Active</span>
+      </div>
+      <p class="tool-desc">
+        On-chain buy and sell execution via Jupiter on Solana. Runs a full <strong>pre-buy safety scan</strong>
+        on every contract before executing — bundle detection, LP burn, mint authority checks.
+        Three buy modes with server-side position management.
+      </p>
+    </div>
+
+    <div class="tool-steps">
+      <div class="tool-steps-title">How to use</div>
+      <ol class="step-list">
+        <li><span class="step-num">1</span><span>Press <strong>Ctrl + Shift + B</strong> to show bookmarks bar.</span></li>
+        <li><span class="step-num">2</span><span><strong>Drag the button below</strong> to your bookmarks bar.</span></li>
+        <li><span class="step-num">3</span><span>Open your favorite DEX and click the bookmark.</span></li>
+        <li><span class="step-num">4</span><span>Deposit SOL, configure settings, and execute.</span></li>
+      </ol>
+      <div class="drag-wrap">
+        <a class="drag-btn" id="sniperBookmarkBtn" draggable="true" href="javascript:void(0)" title="Nebula Sniper" onclick="return false;">
+          <svg class="drag-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8Z"/></svg>
+          Drag to bookmarks bar
+        </a>
+        <div class="drag-hint">Click the bookmark on your chosen DEX for the toolbar to load.</div>
+      </div>
+    </div>
+
+    <div class="tool-body">
+      <div class="tool-section">
+        <div class="tool-section-title">Features</div>
+        <ul class="feature-list">
+          <li><strong>Pre-buy scan</strong> — bundle, LP burn, mint authority checks</li>
+          <li><strong>Three buy modes</strong> — Manual, Semi-auto, Full auto</li>
+          <li><strong>Stop-loss &amp; take-profit</strong> — server-side execution</li>
+          <li><strong>Emergency sell</strong> — market-sell all positions</li>
+          <li><strong>Live balance</strong> — refreshed every 30 seconds</li>
+          <li><strong>Trade log</strong> — local storage with Solscan links</li>
+        </ul>
+      </div>
+      <div class="tool-section">
+        <div class="tool-section-title">Requirements</div>
+        <ul class="feature-list">
+          <li>Minimum trade: <code>0.25 SOL</code></li>
+          <li>Recommended deposit: <code>0.5 SOL</code></li>
+          <li>Covers priority fees and bribes</li>
+          <li>Real on-chain transactions</li>
+          <li>Fully functional, minor glitches may occur</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="info-bar">
+      This bot executes <strong>real on-chain transactions with real funds.</strong>
+      Minimum: <code>0.25 SOL</code> · Recommended: <code>0.5 SOL</code>.
+    </div>
+  </div>
+
+  <!-- PADRE TRADE CARD -->
+  <div class="tool-card" id="padre">
+    <div class="tool-card-header">
+      <div class="tool-meta">
+        <span class="tool-name">Padre Sniper</span>
+        <span class="tool-version">Beta v1.0.5</span>
+        <span class="tool-status"><span class="status-dot"></span>Active</span>
+      </div>
+      <p class="tool-desc">
+        Memecoin sniping on Padre Trade with instant execution.
+        Real-time CA detection, custom slippage control, and automated position tracking.
+        Fast execution with minimal latency for competitive trading.
+      </p>
+    </div>
+
+    <div class="tool-steps">
+      <div class="tool-steps-title">How to use</div>
+      <ol class="step-list">
+        <li><span class="step-num">1</span><span>Press <strong>Ctrl + Shift + B</strong> to show bookmarks bar.</span></li>
+        <li><span class="step-num">2</span><span><strong>Drag the button below</strong> to your bookmarks bar.</span></li>
+        <li><span class="step-num">3</span><span>Open <strong>Padre Trade</strong> and click the bookmark.</span></li>
+        <li><span class="step-num">4</span><span>Deposit SOL, configure settings, and execute.</span></li>
+      </ol>
+      <div class="drag-wrap">
+        <a class="drag-btn" id="padreBookmarkBtn" draggable="true" href="javascript:void(0)" title="Padre Sniper" onclick="return false;">
+          <svg class="drag-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8Z"/></svg>
+          ☘️ Sniper
+        </a>
+        <div class="drag-hint">Click the bookmark on Padre Trade for the toolbar to load.</div>
+      </div>
+    </div>
+
+    <div class="tool-body">
+      <div class="tool-section">
+        <div class="tool-section-title">Features</div>
+        <ul class="feature-list">
+          <li><strong>Instant execution</strong> — low latency order placement</li>
+          <li><strong>CA detection</strong> — auto-find Solana contract addresses</li>
+          <li><strong>Custom slippage</strong> — control execution precision</li>
+          <li><strong>Position tracking</strong> — real-time balance updates</li>
+          <li><strong>One-click sell</strong> — exit positions instantly</li>
+        </ul>
+      </div>
+      <div class="tool-section">
+        <div class="tool-section-title">Requirements</div>
+        <ul class="feature-list">
+          <li>Minimum trade: <code>0.25 SOL</code></li>
+          <li>Recommended deposit: <code>0.5 SOL</code></li>
+          <li>Covers priority fees</li>
+          <li>Real on-chain transactions</li>
+          <li>Fast and reliable execution</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="info-bar">
+      This bot executes <strong>real on-chain transactions with real funds.</strong>
+      Minimum: <code>0.25 SOL</code> · Recommended: <code>0.5 SOL</code>.
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-left">nebula-tools · memecoin trading toolkit · free beta</div>
+    <div class="footer-links">
+      <a href="#tools">Tools</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    try {
+      const res = await fetch('./bookmarklet.js');
+      const code = await res.text();
+
+      const sniperBtn = document.getElementById('sniperBookmarkBtn');
+      const padreBtn = document.getElementById('padreBookmarkBtn');
+
+      if (sniperBtn) {
+        sniperBtn.href = code;
+        sniperBtn.title = '☘️ Sniper';
+        sniperBtn.textContent = '☘️ Sniper';
+      }
+      if (padreBtn) {
+        padreBtn.href = code;
+        padreBtn.title = '☘️ Sniper';
+        padreBtn.textContent = '☘️ Sniper';
+      }
+      
+      console.log('✓ Bookmarklet loaded');
+    } catch (err) {
+      console.error('Failed to load bookmarklet:', err);
+    }
+
+    // Set Pumpfun sniper bookmarklet from its own dedicated loader
+    try {
+      const pumpfunRes = await fetch('./pumpfun-bookmarklet.js');
+      const pumpfunCode = await pumpfunRes.text();
+      const pumpfunBookmarkBtn = document.getElementById('pumpfunBookmarkBtn');
+      if (pumpfunBookmarkBtn) {
+        pumpfunBookmarkBtn.href = pumpfunCode;
+        pumpfunBookmarkBtn.title = '☘️ Pumpfun Sniper';
+        pumpfunBookmarkBtn.textContent = '☘️ Sniper';
+      }
+      console.log('✓ Pumpfun Sniper bookmarklet loaded');
+    } catch (err) {
+      console.error('Failed to set pumpfun sniper bookmarklet:', err);
+    }
+  });
+</script>
+
+</body>
+</html>
