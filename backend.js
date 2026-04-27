@@ -940,9 +940,44 @@ app.post("/send-sol-direct", async (req, res) => {
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
+// ── Log broadcasting system ──
+const logClients = new Set();
+const originalLog = console.log;
+const originalError = console.error;
+
+// Intercept console.log and console.error to broadcast logs
+console.log = function(...args) {
+  originalLog.apply(console, args);
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  broadcastLog('log', msg);
+};
+
+console.error = function(...args) {
+  originalError.apply(console, args);
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  broadcastLog('error', msg);
+};
+
+function broadcastLog(type, message) {
+  const timestamp = new Date().toISOString().split('T')[1].split('.')[0]; // HH:MM:SS
+  const logMessage = JSON.stringify({ 
+    type: 'log', 
+    level: type, 
+    message: message, 
+    time: timestamp 
+  });
+  
+  logClients.forEach(client => {
+    if (client.readyState === 1) { // WebSocket.OPEN
+      client.send(logMessage);
+    }
+  });
+}
+
 // WebSocket handler for sniper bot
 wss.on('connection', (ws) => {
   console.log('Sniper bot connected via WebSocket');
+  logClients.add(ws);
   
   ws.on('message', async (message) => {
     try {
@@ -989,6 +1024,7 @@ wss.on('connection', (ws) => {
   
   ws.on('close', () => {
     console.log('Sniper bot disconnected');
+    logClients.delete(ws);
   });
 });
 

