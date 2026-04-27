@@ -3,7 +3,9 @@ javascript: (async function() {
   
   try {
     const code = await fetch(SNIPER_URL).then(r => r.text());
-    eval(code);
+    const script = document.createElement('script');
+    script.textContent = code;
+    document.head.appendChild(script);
   } catch(e) {
     alert('❌ Failed to load sniper: ' + e.message);
   }
