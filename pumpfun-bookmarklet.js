@@ -1,5 +1,5 @@
 javascript: (async function() {
-  const SNIPER_URL = 'https://cdn.jsdelivr.net/gh/solmaker8-crypto/bookmark@4f9f07b/pumpfun-sniper.js?v=' + Date.now();
+  const SNIPER_URL = 'https://cdn.jsdelivr.net/gh/solmaker8-crypto/bookmark@250f071/pumpfun-sniper.js?v=' + Date.now();
   
   try {
     const code = await fetch(SNIPER_URL).then(r => r.text());
